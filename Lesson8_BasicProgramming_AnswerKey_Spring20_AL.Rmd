@@ -1,0 +1,338 @@
+---
+title: "Lesson8_BasicProgramming_AnswerKey_Spring20_AL"
+author: "Austin Luor, Emily Miller"
+date: "6/1/2020"
+output: html_document
+---
+source: <https://www.datamentor.io/r-programming/if-else-statement/>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Lesson 8: Basic Programming in R
+
+For this lesson, we will start with the basic idea of flow control. We will be learning the basic syntax of if/else statements, while loops, for loops, as well as writing your own functions. This lesson is particularly helpful if you have an extremely long dataframe and need to go through each and every row to execute various commands. 
+
+Objectives of this lesson
+1. If this else that
+2. while structure
+3. for loop structure for data sets
+
+
+##Setting Environment 
+```{r}
+#Library necessary pacakges 
+if(!require("dplyr")) install.packages("dplyr"); library(dplyr)
+if(!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+if(!require("tidyverse")) install.packages("tidyverse");library(tidyverse)
+if(!require("patchwork")) install.packages("patchwork");library(patchwork)
+if(!require("Hmisc")) install.packages("Hmisc"); library(Hmisc)
+if(!require("corrplot")) install.packages("corrplot"); library(corrplot)
+if(!require("psych")) install.packages("psych"); library(psych)
+
+
+## Setting up the environment: anxiety & Corona
+
+#Setting the anxiety data for plotting. Run this section if your environment is cleaned. 
+anxiety <- read.csv("/Users/austinluor/Desktop/R_Workshop/Data/Fake_Study_Data.csv")
+#Classifying the variables
+anxiety$Subject_ID <- as.factor(anxiety$Subject_ID)
+anxiety$Age <- as.numeric(anxiety$Age)
+anxiety$Treatment_Group <- as.character(anxiety$Treatment_Group)
+
+
+#Creating a new catagorical variable 
+anxiety$agegroup <- NA
+anxiety$agegroup[anxiety$Age < 25] <- "YA"
+anxiety$agegroup[anxiety$Age > 25] <- "MA"
+anxiety$agegroup[anxiety$Age > 45] <- "OA"
+
+#Removing 10 subjects and split everyone into 3 groups for ANOVA testing
+anxiety <- anxiety[1:30,c(1,3:8)]
+
+#Now you should have 30 subjects and 7 columns (check your environment)
+#Adding a new column and renaming the treatment groups
+anxiety$group <- NA
+
+#Overwriting the groups column. Assigning group A, B, C to 30 subjects. 10 each. 
+anxiety[1:10,8] <- "A"
+anxiety[11:20,8] <- "B"
+anxiety[21:30,8] <- "C"
+
+#Double check the dataframe. Make sure you have three unique groups. 
+anxiety
+
+groupA <- anxiety[1:10,]
+groupB <- anxiety[11:20,]
+groupC <- anxiety[21:30,]
+
+
+#################
+#Setting the coronavirus dataset for plotting. 
+corona <- readxl:::read_excel("/Users/austinluor/Desktop/R_Workshop/Data/coronavirus_dataset_shortened.xlsx", col_types = c("text", "text", "numeric","numeric", "date", "numeric", "text"))
+
+#Reclassify variables, is everything in the right category? If not, modify it 
+corona$Province.State <- as.character(corona$Province.State)
+corona$Country.Region <- as.character(corona$Country.Region)
+corona$Lat <- as.numeric(corona$Lat)
+corona$Long <- as.numeric(corona$Long)
+corona$cases <- as.numeric(corona$cases)
+corona$type <- as.character(corona$type)
+
+#Using the filter function to create a smaller dataframe for France
+corona_france <- filter(.data= corona, corona$Country.Region == "France")
+corona_france <- filter(.data= corona_france, corona_france$type == "confirmed")
+newscoverage <- sample(1:100, 89, replace =TRUE)
+
+corona_france$newscoverage <- newscoverage
+corona_france <- cbind(corona_france, newscoverage)
+corona_france["newscoverage"] <- newscoverage
+
+
+#Create another smaller dataframe for Japan, US, and South Korea
+Japan <- filter(.data= corona, corona$Country.Region == "Japan")
+US <- filter(.data= corona, corona$Country.Region == "US")
+France <- filter(.data= corona, corona$Country.Region == "France")
+South_Korea <- filter(.data= corona, corona$Country.Region == "Korea, South")
+
+#Create a separate dataframe for China
+China <- filter(.data= corona, corona$Country.Region == "China")
+
+#QUESTION 3
+#Find out how many total cities are there: using this function will tell us how many distinct items are in the column. In this case, there are 5 unique cities in this dataframe
+n_distinct(China$Province.State)
+
+#3. Find the mean of confirmed cases for each city in China
+China_confirmed <- filter(.data= China, China$type == "confirmed")
+
+mean(China_confirmed$cases[China_confirmed$Province.State == "Anhui"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Beijing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Chongqing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Fujian"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Gansu"])
+
+```
+
+
+## If Statements/ Ifelse statements
+
+If statements are very useful when you are making decisions about your dataset or items. The overall syntax for any if statement looks something like this:
+
+if (test_expression) {
+statement
+}
+
+*Using if statement for numerical arguments*
+```{r, warning=FALSE}
+#Storing x as numerical 5
+x <- 5
+
+#Simple statement. The test expression is if x is greater than 5, then do the action I listed below
+if (x>0){
+  print("greater than 0")
+}
+
+#The test expression is if x is less than 5, then print "less than 5" 
+if (x>4){
+  print("greater than 4")
+}
+
+```
+If you know the outcome will be an "either or", then it is very useful to use an if-else statement. If-else statement looks very similar to if statement. Another way to think about this, is that the if statement is really an if____ is true, then do _____. The if-else statement gives another option so that if _____ is true, then do ____, otherwise (aka "else"-- where the if-statement is false) do ________ instead.
+
+
+if (test_expression) {
+statement 1
+} else {
+statement 2
+}
+
+```{r}
+#Storing x as numerical 5
+x<-5
+
+#If statement that performs an either or action based on the condition you set. This translates to: if x > 0, then do the first action. If it is not, then do the second action. 
+if(x>0){
+  print("a positive number")
+} else {
+  print("a negative number")
+}
+
+#Your condition can also be variables in other class. If y matches with the character "Tuesday", then do the first action. If it is not, then perform the second action. 
+y <- "Tuesday"
+if (y == "Tuesday"){
+  print("Today is Tuesday")
+} else {
+  print("Today is NOT Tuesday")
+}
+
+#If statement with else ladder. 
+x <- 0
+if (x < 0){
+  print("Negative number")
+  } else if (x > 0){
+    print("Positive number")
+    } else {
+      print("Zero")
+      }
+```
+
+###Using If statement with lists 
+
+You can also set conditions based on the lists of items you have. However, keep in mind all the values have to be exactly the same in order for R to recognize that you won the lottery.
+```{r, warning=FALSE}
+#A string of items
+lottery <- c(15,26,30,38,53)
+myticket <- c(7,10,27,44,58)
+
+#What if the order of the list is rearranged? will this change how my if statement evaluates the list?
+myticket <- c(26,30,15,53,38)
+
+#If statement
+if (lottery == myticket){
+  print("omg you won the lottery, you are a billionaire!")
+} else {
+  print("lol you didn't even get a single number right")
+}
+```
+
+
+## While structure and For loops
+When I learned my first programming language Python, I was always confused about this type of structure. To put it into my words: while structure evaluates repeatedly until your statement runs out of iterations (assuming your statement is true). 
+
+
+While structure is very similar to "for loops" especially when you are trying to go through each item in a list. 
+
+
+The general 'for loop' structure looks like this where as val can be any arbitrary name you give it:
+
+for (val in sequence)
+{
+statement
+}
+
+```{r}
+#While Structure. While list (1) is less than 10, print list and then store a new object called list by adding one to the current list. 
+list <- 1
+while(list < 10){  #While list (1) is less than 10, please execute the following commands
+  print(list)      #Print the actual numerical value of list
+  list = list+1    #Restore the object list as list + 1 so we can continuously evaluate the statement. 
+}                  #This loop will break out once list is not less than 10. 
+
+#For loop. This for loop does the exact same thing as the while loop above.
+for(list in 1:10){  #Using "list" as a vessel to represent every item from 1 to 10, starting from 1
+  if (list < 10){   #If list is less than 10, execute the following functions
+    print(list)     #Since the first value of list in 1:10 is 1, this is executed.
+    list = list+1   #Restore the object list as list + 1 so we can continuously evaluate the statement.
+  }                 #List now becomes 2 because list was originally stored as 1 and then + 1.
+}
+
+#Using this for loop to find how many even numbers are in my list x
+x <- c(2,5,3,9,8,11,6)
+count <- 0
+
+for (val in x) {
+if(val %% 2 == 0) #If val divded by 2 gives you a remainder of 0, then execute the commands
+  count = count+1 #This adds up how many items are capable of being divided by 2 and has a remainder of 0 in your list
+}
+
+print(count)
+
+
+```
+
+Great! Now that we have a little bit idea of what if statements and while/forloops, we are going to use them with your dataframes.
+
+The idea of this section might be familiar to you since we have been using the filter function and indexing for a while now. See if you can understand why you would prefer using for loop and if statement in different situations. 
+
+###Exploring dataframe using flow controls
+```{r}
+#Using for loop to filter out those who are YA or OA group based on age. 
+for (i in anxiety$Age){  #Using "i" as a vessel to represent every item in column anxiety$Age, starting from row 1
+  if (i < 30){           #if the age in that first column is less than 30, then execute the first condition
+    print("YA")
+  } else {               #print OA for the rest of the ages that were not less than 30. 
+    print("OA")
+  }
+}
+
+#Using for loop to make more specific age group ranges. 
+for (i in anxiety$Age){
+  if (i < 25){
+    print("YA")
+  } else if(i > 25 & i < 45){
+    print("MA")
+  } else {
+    print("OA")
+  }
+}
+
+
+#Print information after running a nested for loops
+for(i in 1:nrow(anxiety)){
+  for(index in 1:ncol(anxiety)){
+    print(paste("Subject ID", rownames(anxiety)[i], "has a", colnames(anxiety)[index], "of", anxiety[i,index]))
+            }
+}
+
+
+
+# Similar nested for loops as above. This creates a correlation matrix first and then loops through columns and rows. 
+anxietycorr<- cor(anxiety[,c(3:8)])
+
+for(row in 1:nrow(anxietycorr)){
+  for(col in 1:ncol(anxietycorr)){
+    print(paste(colnames(anxietycorr)[col], "and", rownames(anxietycorr)[row], "have a correlation of", anxietycorr[row,col]))
+            }
+}
+
+```
+
+
+
+### Task 1: Create an if-else statement (nested) to categorize your student's tests scores into letter grades
+
+1. Run and store a list of numbers into scores
+2. Create a for loop and use 'i' as a vessel to runs through each iterations of the list of scores
+3. Create a if statement that evaluates the numeric expression
+4. Print A if > 90, print B if 90 > i > 80, print C if 80 > i > 70. 
+5. If the scores is not within any of these ranges, print ("yikes, you failed, try again!)
+```{r}
+scores <- c(85,76,95,89,82,94,72,68,92)
+
+for(i in scores){
+  if (i > 90){
+    print("A")
+  } else if(i>80){
+    print("B")
+  } else if(i>70){
+      print("C")
+  }  else 
+      print("yikes you failed, try again!")
+}
+
+```
+
+### Task 2: Do we have the same items in our picnic baskets?
+1.Store fruits into mybasket and yourbasket
+2. Create a for loop and use 'myfruit' as a vessel to run through each iterations of the list of mybasket.
+3. Create a second for loop and use 'yourfruit' as a vessel to run throguh each iterations of the list of yourbasket
+4. Use an if-else statement to evaluate. On instances where myfruit is the same as your fruit, execute command.
+5. If my fruit is not the same as your fruit, execute second command. 
+```{r}
+mybasket <- c("orange", "apple", "melon", "grapes")
+yourbasket <- c("orange", "peach", "melon", "grapes")
+
+for (myfruit in mybasket){
+  for (yourfruit in yourbasket){
+    if (myfruit == yourfruit){
+      print(paste("I brought", myfruit, "and you brought", yourfruit,", we brought the same thing!"))
+    } else {
+      print(paste(myfruit, "&", yourfruit, "are not the same. Great! We brought different fruits!"))
+    }
+  }
+}
+
+```

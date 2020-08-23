@@ -1,0 +1,264 @@
+---
+title: "Lesson5_DataCleaning_AnswerKey_Spring20_AL"
+author: "Austin Luor"
+date: "5/17/2020"
+output: html_document
+---
+Source: <https://www.hackerearth.com/practice/machine-learning/advanced-techniques/regular-expressions-string-manipulation-r/tutorial/>
+I've taken ideas and codes from this following source in order to make this lesson. This is a very helpful source! 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Lesson 5: Data Cleaning
+
+For this lesson, we will be learning how to clean our data (mostly text data) now that it has been wrangled. The most important aspect of this lesson is to understand how to re-name/reword/replace your data. I personally think that the regular expression for cleaning is a bit hard to learn, but I believe it will be a very useful skill set to have! 
+
+The objectives of this lesson:
+Part 1. regex(): regular expression
+Part 2. Workshop on gather() and spread()
+
+
+#Setting up the environment for this lesson
+```{r}
+#Library necessary pacakges 
+if(!require("dplyr")) install.packages("dplyr"); library(dplyr)
+if(!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+if(!require("tidyverse")) install.packages("tidyverse");library(tidyverse)
+if(!require("patchwork")) install.packages("patchwork");library(patchwork)
+if(!require("stringr")) install.packages("stringr");library(stringr)
+
+
+```
+
+
+## Regular Expressions
+Regular Expressions (a.k.a regex) are a set of pattern matching commands used to detect string sequences in a large text data. These commands are designed to match a family (alphanumeric, digits, words) of text which makes then versatile enough to handle any text / string class.
+
+In short, using regular expressions you can get more out of text data while writing shorter codes.
+
+Note: for this part of the lesson, we will not be using dataframe anxiety or coronavirus. We wil make up new artifical dataframes to see what each of these regular expression does.
+
+###toupper() & tolower() & cat() & substr()
+We will be using the example string for the entire lesson.
+```{r}
+string <- "The HOT SUN WARMED the GROUND The GRAY MOUSE ATE the CHEESE The STRONG FATHER CARRIED my BROTHER The LARGE MONKEY CHASED the CHILD I love McDonalds 314-362-0000"
+
+#To make everything upper case
+toupper(string)
+
+#To make everything lower case
+tolower(string)
+
+#Concatenating two strings 
+cat(string, "This sentence is too long", sep= "-")
+
+#Extract parts of the string
+substr(x=string, start=25, stop=71)
+
+```
+
+## Replacing and splitting strings
+chartr() and str_replace_all() are both good functions for this purpose. 
+
+Chartr() works better with finding specific letters instead of replacing an actual word
+
+overall formula for using:
+*chartr("to remove", "replace with", x=path to the string)*
+*str_replace_all(string=path to string, pattern= "things to remove", replacement= "replace with")*
+```{r}
+#Chatr() replacement
+chartr("T", "t", string)
+
+#See what the problem is if you have replace it with word?
+chartr("GRAY", "YELLOW", string)
+
+#str_replace_all()
+str_replace_all(string=string, pattern= c("McDonalds"), replacement = "KFC")
+
+#
+str_replace_all(string=string, pattern= c("The"), replacement = "the")
+
+###########
+#Split strings 
+strsplit(x = c("ID-101","ID-102","ID-103","ID-104"),split = "-")
+
+strsplit(x = c("ID-101","ID-102","ID-103","ID-104"),split = "-10")
+
+string %>% tolower() %>% strsplit(split = "the")
+```
+
+## sub() and gusb()
+
+First we'll clean numeric variables by removing characters using `gsub()` and regular expressions. `gsub()` finds a pattern (first argument) and replaces it (second argument).
+
+Regular expressions can be tricky at first, but this cheatsheet can help:
+<https://www.rstudio.com/wp-content/uploads/2016/09/RegExCheatsheet.pdf>
+
+Things that are helpful to remember: 
+
+[aeiou]	matches lower case vowels
+[AEIOU]	matches upper case vowels
+[0123456789]	matches any digit
+[0-9]	same as the previous class
+[a-z]	match any lower case letter
+[A-Z]	match any upper case letter
+[a-zA-Z0-9]	match any of the above classes
+[^aeiou]	matches everything except letters
+[^0-9]	matches everything except digits
+
+[[:lower:]]	matches lower case letter
+[[:upper:]]	matches upper case letter
+[[:alpha:]]	matches letters
+[[:digit:]]	matches digits
+[[:space:]]	matches space characters eg. tab, newline, vertical tab, space, etc
+[[:blank:]]	matches blank characters (same as previous) such as space, tab
+[[:alnum:]]	matches alphanumeric characters, e.g. AB12, ID101, etc
+[[:cntrl:]]	matches control characters. Control characters are non-printable characters such as \t (tab), \n (new line), \e (escape), \f (form feed), etc
+[[:punct:]]	matches punctuation characters
+[[:xdigit:]]	matches hexadecimal digits (0 - 9 A - E)
+[[:print:]]	matches printable characters ([[:alpha:]] [[:punct:]] and space)
+[[:graph:]]	matches graphical characters. Graphical characters comprise [[:alpha:]] and [[:punct:]]
+
+
+```{r}
+#Remember this is our string text!
+string <- "The HOT SUN WARMED the GROUND The GRAY MOUSE ATE the CHEESE The STRONG FATHER CARRIED my BROTHER The LARGE MONKEY CHASED the CHILD I love McDonalds 314-362-0000"
+
+#Removing any non-numeric characters
+gsub("[^0-9]", "", string)
+
+#Removing any numeric characters
+gsub("[0-9]", "", string)
+
+#Removing any alphabets character strings
+gsub("[[:alpha:]]", "", string)
+
+#Replace specific numbers with other numbers
+gsub("0000", "1989", string)
+
+```
+
+## Padding strings
+The arguments of the function are:
+
+args(paste)
+function (..., sep = " ", collapse = NULL)
+… = The space to write the series of strings.
+
+sep = The element which separates every term. It should be specified with character string format.
+
+collapse = The element which separates every result. It should be specified with character string format and it is optional. i
+
+We can see an example where both arguments works together:
+
+```{r}
+#Padding white spaces to the left side
+str_pad("abc", 30, side="left", pad = " ")
+
+#Padding 0 digits to both sides of the string
+str_pad("abc", 9, side="both", pad = "0")
+
+#Padding specific characters to your string 
+paste0("# ", string)
+
+
+paste0("# ", anxiety$Treatment_Group)
+
+############Additional example with paste0()
+# First example
+paste("Subject", "ID", "8")
+
+
+# Second example
+paste("Subject", "ID", "8", sep = "_")
+
+
+# Third example (5 strings created)
+paste(rep("file", 5), rep("number", 5), seq(1,5,1), sep = "_")
+
+# Fourth example (an unique string created)
+paste(rep("file", 5), rep("number", 5), seq(1,5,1), sep = "_", collapse = ", ")
+
+# Default value of sep with paste function
+name_village <- paste("Ma", "con", "do")
+name_village
+
+# Value of sep: ""
+name_village <- paste("Ma", "con", "do", sep = "")
+name_village
+
+# Default value of sep with paste function
+name_village <- paste0("Ma", "con", "do")
+name_village
+
+
+```
+As we can see in fourth example, if we specify a value in argument collapse, we obtain an unique string instead of five as in the previous example
+
+The difference between paste() and paste0() is that the argument sep by default is ” ” (paste) and “” (paste0).
+
+
+Good exercise source: <https://www.rpubs.com/okamoto/r4ds_14>
+
+
+### Workshop with gather() and Spread()
+
+#### Task 1: Consider this make up data:
+
+```{r}
+#Airline profit dataframe. profit and investments are in millions
+airline_profit <- data.frame(airline=c("Delta","JetBlue","Southwest","United","American","Spirit","Frontier","Alaska"),
+                      profit=c(2,4,3.5,12,5,1,0.5,4.5),
+                      invest=c(10,20,15,40,25,5,2.5,20))
+
+#Use the functions that you have learned up till now to create two new columns ini the dataframe. One called profit_deviant and another called invest_deviant. The function that goes into making these columns are: invest column - mean of the invest column (same thing for profit column). 
+airline_profit <- mutate(airline_profit,
+                         profit_deviant= airline_profit$profit - mean(airline_profit$profit),
+                         invest_deviant= airline_profit$invest - mean(airline_profit$invest))
+
+#Use the gather function to create a plot (all airlines on the x axis, numeric dollars on the y axis, color in based on proft/investment, and use geom_point to display your data)
+airline_profit %>% gather(key=Finance, value=Millions, -airline, -profit_deviant, -invest_deviant) %>% ggplot(aes(x=airline, y=Millions, color=Finance)) + geom_point(size = 5) + theme_classic()
+
+#Use the gather function to create a plot (invest/profit x axis, numeric dollars on the y axis, color in based on proft/investment, and use geom_violin to display your data)
+airline_profit %>% gather(key=Finance, value=Millions, -airline, -profit_deviant, -invest_deviant) %>% ggplot(aes(x=Finance, y=Millions, color=Finance)) + geom_violin(width=0.5) + theme_classic()
+
+```
+
+
+### Task2: Imagine you have two groups of participants, each with some information about their cognitive test scores. 
+
+```{r}
+#Two sample population data
+sampleA <- data.frame(subject=c("1","2","3","4","5","6","7","8","9","10"),
+                     group=c("Y","Y","Y","Y","Y","Y","Y","Y","Y","Y"),
+                     memory=c(315,311,308,332,312,320,325,330,327,320),
+                     shipley=c(15,16,13,17,18,14,16,15,17,19),
+                     MoCA=c(25,27,26,30,28,25,27,22,28,30),
+                     perception= c(90,78,89,76,90,99,100,67,59, 85))
+            
+sampleB <-data.frame(subject=c("11","12","13","14","15","16","17","18","19","20"),
+                     group=c("N","N","N","N","N","N","N","N","N","N"),
+                     memory=c(305,312,330,301,305,308,312,321,311,320),
+                     shipley=c(13,14,17,17,14,15,18,12,13,20),
+                     MoCA=c(23,28,24,30,26,26,21,30,27,30),
+                     perception= c(70,98,59,76,89,92,83,89,68,99))
+
+#For Sample A: Use the gather function to create a plot (subject on the x axis, numeric scores on the y axis, and use geom_point to plot for each participant)
+sampleA %>% gather(key=test, value=score, -subject, -group) %>% ggplot(aes(x=subject, y=score, color=test)) + geom_point(size=2.5) + theme_classic()
+
+#For Sample B: Use the gather function to create a plot (unique tests names on the x axis, and numeric scores on the y axis, and display it with boxplot)
+sampleB %>% gather(key=test, value=score, -subject, -group, -memory) %>% ggplot(aes(x=test, y=score, fill=test)) + geom_boxplot() + theme_classic()
+
+#Combine sample A dataframe with sample B dataframe, store it to a new object called: Allsample
+Allsample <- rbind(sampleA, sampleB)
+
+#use the new Allsample dataframe: use the gather function to create a plot (unique tests names on the x axis, and numeric scores on the y axis, and display it with boxplot, change the colors based on the groups)
+Allsample %>% gather(key = test, value=score, -subject, -group, -memory) %>% ggplot(aes(x=test, y=score, fill=group)) + geom_boxplot() + theme_classic()
+
+#Think about what other plots you can come up with? 
+
+
+```
+

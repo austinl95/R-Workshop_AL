@@ -1,0 +1,378 @@
+---
+title: "Lesson9_ANOVA_Spring20_AL"
+author: "Austin Luor"
+date: "06/13/2020"
+output: html_document
+---
+
+Resources:
+<http://www.sthda.com/english/wiki/one-way-anova-test-in-r#how-one-way-anova-test-works>
+and Dr. Katie Cousins's R workshop 2018-2019. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Objectives 
+In this lesson, we will be extending our discussion on the comparison between the means. Specially, we will be talking about ANOVA and how it relates to t-tests. ANOVA is the abbreviation of the Analysis of the Variance.  
+
+Even though an ANOVA compares means, it is an analysis of variance that tests whether the variance accounted for by the model is greater than what we would expect by chance - i.e. compares variance within groups to the variance between groups. If the between-group variance is large compared to the within-group variance, the ANOVA will conclude that the groups DO differ in their means. If the between-group variance is small compared to the within group variance, the ANOVA will conclude that the groups are all the same.
+
+Objectives of this lesson:
+1. Understand the purpose of ANOVA
+2. computation of ANOVA
+3. One way ANOVA
+4. Reject null hypothesis: ANOVA
+
+## Set up
+In this lesson, we will continue using the Fake Study data provided. This data set has two experimental groups. One received treatment and one does not (Control). 
+##Setting Environment 
+```{r}
+#Library necessary pacakges 
+if(!require("dplyr")) install.packages("dplyr"); library(dplyr)
+if(!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+if(!require("tidyverse")) install.packages("tidyverse");library(tidyverse)
+if(!require("patchwork")) install.packages("patchwork");library(patchwork)
+if(!require("Hmisc")) install.packages("Hmisc"); library(Hmisc)
+if(!require("corrplot")) install.packages("corrplot"); library(corrplot)
+if(!require("psych")) install.packages("psych"); library(psych)
+
+## Setting up the environment: anxiety & Corona
+
+#Setting the anxiety data for plotting. Run this section if your environment is cleaned. 
+anxiety <- read.csv("/Users/austinluor/Desktop/R_Workshop/Data/Fake_Study_Data.csv")
+#Classifying the variables
+anxiety$Subject_ID <- as.factor(anxiety$Subject_ID)
+anxiety$Age <- as.numeric(anxiety$Age)
+anxiety$Treatment_Group <- as.character(anxiety$Treatment_Group)
+
+
+#Removing 10 subjects and split everyone into 3 groups for ANOVA testing
+anxiety <- anxiety[1:30,c(1,3:8)]
+
+#Now you should have 30 subjects and 7 columns (check your environment)
+#Adding a new column and renaming the treatment groups
+anxiety$group <- NA
+
+#Overwriting the groups column. Assigning group A, B, C to 30 subjects. 10 each. 
+anxiety[1:10,8] <- "A"
+anxiety[11:20,8] <- "B"
+anxiety[21:30,8] <- "C"
+
+#Double check the dataframe. Make sure you have three unique groups. 
+anxiety
+
+groupA <- anxiety[1:10,]
+groupB <- anxiety[11:20,]
+groupC <- anxiety[21:30,]
+
+#Creating a new catagorical variable 
+anxiety$agegroup <- NA
+anxiety$agegroup[anxiety$Age < 25] <- "YA"
+anxiety$agegroup[anxiety$Age > 25] <- "MA"
+anxiety$agegroup[anxiety$Age > 45] <- "OA"
+
+#################
+#Setting the coronavirus dataset for plotting. 
+corona <- readxl:::read_excel("/Users/austinluor/Desktop/R_Workshop/Data/coronavirus_dataset_shortened.xlsx", col_types = c("text", "text", "numeric","numeric", "date", "numeric", "text"))
+
+#Reclassify variables, is everything in the right category? If not, modify it 
+corona$Province.State <- as.character(corona$Province.State)
+corona$Country.Region <- as.character(corona$Country.Region)
+corona$Lat <- as.numeric(corona$Lat)
+corona$Long <- as.numeric(corona$Long)
+corona$cases <- as.numeric(corona$cases)
+corona$type <- as.character(corona$type)
+
+#Using the filter function to create a smaller dataframe for France
+corona_france <- filter(.data= corona, corona$Country.Region == "France")
+corona_france <- filter(.data= corona_france, corona_france$type == "confirmed")
+newscoverage <- sample(1:100, 89, replace =TRUE)
+
+corona_france$newscoverage <- newscoverage
+corona_france <- cbind(corona_france, newscoverage)
+corona_france["newscoverage"] <- newscoverage
+
+
+#Create another smaller dataframe for Japan, US, and South Korea
+Japan <- filter(.data= corona, corona$Country.Region == "Japan")
+US <- filter(.data= corona, corona$Country.Region == "US")
+France <- filter(.data= corona, corona$Country.Region == "France")
+South_Korea <- filter(.data= corona, corona$Country.Region == "Korea, South")
+
+#Create a separate dataframe for China
+China <- filter(.data= corona, corona$Country.Region == "China")
+
+#QUESTION 3
+#Find out how many total cities are there: using this function will tell us how many distinct items are in the column. In this case, there are 5 unique cities in this dataframe
+n_distinct(China$Province.State)
+
+#3. Find the mean of confirmed cases for each city in China
+China_confirmed <- filter(.data= China, China$type == "confirmed")
+
+mean(China_confirmed$cases[China_confirmed$Province.State == "Anhui"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Beijing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Chongqing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Fujian"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Gansu"])
+
+```
+
+The purpose of running an ANOVA:
+
+*Test the effect of an independent categorical variable with 2+ levels on a dependent continuous variable.*
+
+Consider this scenario: You developed a new clinical drug and you want to see the effectiveness of this drug on lowering anxiety levels of patients. You randomly assigned the drug to two groups and you measure their anxiety level. 
+
+##One Way ANOVA
+To do this, you compare the means of subsets of the data. In our case, you get the mean of the treatment group's anxiety level and the control group's anxiety level and compare. Sounds kind of familiar right? 
+
+The base case is the one-way ANOVA which is an extension of *two-sample t test* for independent groups covering situations where there are more than two groups being compared.
+
+You will compute this when you are ONLY comparing the mean of TWO groups. 
+For instance: 
+  1. does this new drug work on the control population vs patient populuation?
+  2. Does this new class improve math skills of 7th grader's vs. 8th grader's
+  
+For this example, we will compare group A and group B. 
+```{r}
+#Does the mean of self report differ between group A and group B?
+oneway <- aov(anxiety$Stress ~ anxiety$group , data = anxiety)
+
+summary(oneway)
+```
+
+
+##ANOVA (More than 2 groups)
+Big picture speaking, ANOVA test helps you determine if the means (more than 2 groups) are different from each other. This is calculated by examining whether the difference in mean is based on experimental manipulation (treatment) or by error/chance. I'll break it down for you step by step. 
+
+
+Consider this scneario: 
+*Step 1* Compute the grand mean (the total mean of ALL samples)
+*Step 2* Compute the variance WITHIN groups (residual variance)
+*Step 3* Compute the variance BETWEEEN groups 
+*Step 4* Calculate F-Statistics
+*Step 5* Reject/accept null hypothesis 
+
+In other words: you are computing the means of means and then calculate the ratio of explained variance/unexplained variance. You want this ratio to be higher as the difference in mean that you are seeing are due to "explained" variance. 
+
+1. Compute the common variance, which is called variance within samples (S2within) or residual variance.
+2. Compute the variance between sample means as follow:
+  2a. Compute the mean of each group
+  2b. Compute the variance between sample means (S2between)
+3. Produce F-statistic as the ratio of S2between/S2within.
+
+###Step 1: Compute the grand mean
+This is fairly easy. You add up all the samples in your group and divide by the total number of samples. 
+```{r}
+#Writing a function that computes the grand mean. The syntax for writing the function is function(inputs) {computation of the function}. 
+average <- function(x,y,z) {sum(x,y,z)/30}
+
+
+#Input all the parameters, average mean of all groups is 14.66667
+grandmean <-average(groupA$Stress, groupB$Stress, groupC$Stress)
+
+#results. 14.66667 is the mean for every datapoint. 
+grandmean
+
+
+
+ggplot(anxiety, aes(x=group, y=Stress, fill=group, color=group)) + geom_jitter(width = 0.2, size=3) + theme_classic() + geom_hline(aes(yintercept=mean(Stress)))
+```
+
+Next, you want to compute the sum of squares of grand mean. You are computing this because you want to know: How far does each individual data points vary from the grand mean. 
+
+Remember how to compute the sum of squares? 
+*(individual datapoints - grand mean)^2 + (individual datapoints = grand mean)^2 + .....*
+```{r}
+#Writing this SS function so it calculates the sum of square differences.
+SS <- function(x) {sum((x-mean(x))^2)}
+
+#SStotal: sum(All individual data point - grandmean)^2.
+SSTotal <- SS(anxiety$Stress) #Our SS Total is 1484.667
+
+```
+
+
+###Step 2: Compute the variance WITHIN group
+Think about this. If you are trying to see whether drug A has an effect on your groups, you want to make sure the results that you are seeing are due to experimental manipulation and NOT due to the individual variation within the groups (such as error or unexplained variances, example: individual A has a history of taking the drug already so theres no effect on him/her). 
+
+Computing the variance within the group "CALLS OUT" the variance that is NOT due to experimental manipulation. 
+
+*SSWithin = (data point of group A - mean of group A)^2 + ... + (data point of group B - mean of group B)^2 + ...+ (data point of group C - mean of group C)^2*
+
+```{r}
+#Calculate group SSWithin first: sum(individual datapoint of a group - mean of that group)^2.
+SS(groupA$Stress) #SSwithin for group A = 436.5
+SS(groupB$Stress) #SSwithin for group B = 144
+SS(groupC$Stress) #SSwithin for group C = 362.5
+
+#Once you have the SSWithin, you want to add all SSwithin together. 
+SSWITHIN <- SS(groupA$Stress) + SS(groupB$Stress) + SS(groupC$Stress) #SSWithin = 943
+```
+
+
+### Compute the variance BETWEEN group
+This is the variance that is due to your experimental manipulation. In order to compute this, you need to find the mean of groups first. Then you want to find the sum of n(means of groups  - grandmean)^2. n corresponds to how many individual datapoints you have in each group.
+
+In our case: 
+n=10
+grandmean = 14.6667
+
+We can start writing a function for this. 
+```{r}
+#Function to calculate the SS for each group
+between <- function(x) {(length(x))*((mean(x)-grandmean)^2)}
+
+#SSbetween for group A
+between(groupA$Stress) #173.6111
+
+#SSbetween for group B
+between(groupB$Stress) #27.77778
+
+#SSbetween for group C
+between(groupC$Stress) #340.2778
+
+#Summation of all SSbetween 
+SSBETWEEN <- between(groupA$Stress) + between(groupB$Stress) + between(groupC$Stress) #541.6667
+
+
+```
+
+###SSTotal, SSWithin, SSBetween
+DID YOU NOTICE SOMETHING????? YES!
+
+*SS Total = SSWithin + SSbetween*
+
+Let's write down what we know already and make sense out of everything:
+*SSTotal: 1484.667*
+*SSBetween: 541.6667*
+*SSWithin: 943*
+
+Let's figure out our degrees of freedom as well.
+dfTotal: 30 participants - 1 = 29
+dfBetween: 3 groups - 1 = 2
+dfWithin: 3groups*(10 participants in each group - 1) = 27
+
+Double check our math
+```{r}
+#SSBetween + SSWithin = SSTotal
+541.6667 + 943 #SSTotal = 1484.667
+
+#Degrees of freedom
+27 + 2 #dfTotal = 29
+```
+
+
+This means that, if you know the total sum of square variance, and either one of the variables, you can find out the value of last variable. 
+
+
+###F-statistics
+We are not done yet! Don't forget our goal is to determine whether these means are different from each other. To do so, let's list out our null hypothesis...
+
+*H0: mean of group A = mean of group B = mean of group nth group. *
+
+In order to reject the H0...
+*H1: At least one group mean is different from the others.*
+
+Do note that ANOVA only tells you there is a difference among the groups but won't tell you which specific group is different. 
+
+After you calculate the SSTotal, SSWithin, and SS Between, you will compute the F-stats using all these variables. 
+
+*F-Statistic = SSbetween/n-1 / SSWithin/m(n-1)*
+
+In other words, F stats tells you: explained variance/unexplained variance. Therefore you want this number to be higher in order to reject your null hypothesis. 
+
+
+In the chunk below, try your code to compute the F-stats and see if it is large enough to reject the null hypothesis
+```{r}
+fstats <- (SSBETWEEN/2)/(SSWITHIN/27)
+
+#You can also write a function that computes the f-stats
+f <- function(a,b,c,d) {(a/c)/(b/d)}
+
+#Test out this function. You have to input the parameters for your function!
+f(SSBETWEEN,SSWITHIN, 2, 27)
+
+```
+Now, based on your critical value, as long as your f stats exceeds your critical value then you can reject the null hypothesis. 
+
+
+```{r}
+results<-aov(anxiety$Stress ~ anxiety$group)
+summary(results)
+
+```
+
+
+*p-value*
+The probability that we would get a value of F or >F by chance, given that the null hypothesis is correct. In this case, we have 0.218% of obtaining F > 7.755 if the difference in means were truly 0. So we have enough evidence to reject the null hypothesis.
+
+*Interpret the result of one-way ANOVA tests*
+As the p-value is less than the significance level 0.05, we can conclude that there are significant differences between the groups highlighted with “*" in the model summary.
+
+*Multiple pairwise-comparison between the means of groups*
+In one-way ANOVA test, a significant p-value indicates that some of the group means are different, but we don’t know which pairs of groups are different.
+
+It’s possible to perform multiple pairwise-comparison, to determine if the mean difference between specific pairs of group are statistically significant.
+
+
+As the ANOVA test is significant, we can compute Tukey HSD (Tukey Honest Significant Differences, R function: TukeyHSD()) for performing multiple pairwise-comparison between the means of groups.
+```{r}
+TukeyHSD(results)
+
+t.test(anxiety$Stress[anxiety$group == "A"], anxiety$Stress[anxiety$group == "C"], paired=FALSE)
+```
+*diff*: difference between means of the two groups
+*lwr*, *upr*: the lower and the upper end point of the confidence interval at 95% (default)
+*p adj*: p-value after adjustment for the multiple comparisons.
+
+
+### Task 1: Use your ANOVA skills!
+Suppose we want to examine how different groups (group A, B, C) respond to their drug use treatment.
+1. Use the functions that we have created in this lesson to find the "grand mean", "SSWithin", "SSBetween", "SSTotal", "fstats"
+2. See if you can interpret your results based on the f-stats
+3. Use TukeyHSD to examine which exact group is different from which.
+4. Convince yourself using an independent t- test to confirm your anova results
+```{r}
+#Run the function average. 
+average <- function(x,y,z) {sum(x,y,z)/30}
+#Store the average of Drug use for three groups into object 'grandmean'.
+       <- average( , , )
+
+#Run the Sum of square function
+SS <- function(x) {sum((x-mean(x))^2)}
+
+#Find the Sum of square for Everyone's Drug use score
+SS()
+
+#Find the sum of square for between groups, and store it into "SSWITHIN" object
+SSWITHIN <- SS(groupA$     ) + SS(       ) + SS(    )
+
+#Run the within function
+between <- function(x) {(length(x))*((mean(x)-grandmean)^2)}
+
+#Find the withing group differences and store it into "SSBETWEEN" object
+SSBETWEEN <- 
+
+#See if the sum of SSBetween and SSWithin adds up to your total Sum of square.
+
+
+#Run the f stats function
+f <- function(a,b,c,d) {(a/c)/(b/d)}
+
+#Find the f-statistic for this task
+f()
+
+#Call out the summary function and use aov() to examine your variables
+summary(aov())
+
+#Use TukeyHSD to see which group is most different from the other groups
+TukeyHSD(aov(anxiety$Drug_Use~anxiety$group, anxiety))
+
+#Find the group pair that has the greatest difference. Using an independent t test to make sure the groups are different. 
+t.test(anxiety$         [         == ""], anxiety$         [anxiety$        == ""], paired=FALSE)
+
+```
+
+

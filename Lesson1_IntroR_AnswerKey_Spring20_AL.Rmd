@@ -1,0 +1,287 @@
+---
+title: "Lesson1_IntroR_Spring20"
+author: "Austin Luor"
+date: "4/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+Welcome to the R-workshop again!
+
+In this lesson, we will be going through the fundamentals of R including the syntax, packages, and simple operations using base R functionality. I will be using R markdown for presentation purposes. This is just one of the several ways of presenting your R code. Using a R script is great if you have long codes; using R markdown gives you the opportunitiy to see the progress of codes by chunks. 
+
+Again, this might be a very basic review for some of you who have been working with R but we will be going over these objectives one more time. The objective of this lesson is that we want to get you to be comfortable with executing commands in R rather than knowing exactly what to do when you are given a dataset. Therefore, don't be afraid not knowing what to do. Just try to follow and ask questions at any time!! 
+
+Objectives:
+1. Setting path and library necessary packages
+2. Feeding R your files/dataset
+3. Preparing your dataset before data manipulation
+4. Perform mathematic operations using base R functionality
+
+*RStudio Environment*
+
+* **SCRIPT** - upper left window
+* **CONSOLE** - lower left window
+* **ENVIRONMENT/HISTORY** - upper right window
+* **GRAPHICAL OUTPUT/FILES/PLOTS/PACKAGES/HELP** - lower right window
+
+##Before we start some hands-on task, we will go through some basic operations in R. These include basic arthimetic computations, library packages, and setting your working directory. You will get the chance to try these commands on our COVID dataset for homework! 
+
+*Basic Arthimetic computations*
+* Add/Subtract, Multiply/Divide
+* Square root, power
+```{r}
+#Addition
+9 + 5
+
+#Subtraction
+9 - 5
+
+#You can store them as "strings" or "items" 
+nine <- 9
+five <- 5
+nine - five
+
+#Multiply #Division
+nine * five
+nine / 3
+
+#Mix it all up together; PEMDAS still applies! 
+(nine^2) - 3*five
+
+```
+
+*Functions and library Packages*
+Functions come from packages. Functions have the form: 
+`FunctionName(YourInputs, MoreInputs/specifications)`
+
+```{r}
+#Library packages; For Rmarkdown, you can run a code chunk with the green play button to your right.
+if(!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+if(!require("ggpubr")) install.packages("ggpubr"); library(ggpubr)
+library(psych)
+library(readxl)
+library(tidyr)
+library(forcats)
+
+#See if its installed...
+
+
+```
+
+        
+*Importing your data*
+* Creating a dataframe/import your own dataset
+* Creating variables/objects, storing dataset as objects or variables
+* Your data can be various format (SPSS, Eprime, Excel, csv, as long as you have the necessary packages to read them)
+
+```{r}
+#To import your dataset; using the read.csv function.
+read.csv("PATH/TO/YOUR/DATASET")
+
+read.csv("/Users/austinluor/Desktop/R_Workshop/Data/Fake_Study_Data.csv")
+
+anxiety <- read.csv("/Users/austinluor/Desktop/R_Workshop/Data/Fake_Study_Data.csv")
+
+#######################
+
+#This allows you to see the entire dataframe underneath the chunk
+anxiety
+
+#This allows you to see the entire dataframe in another tab
+View(anxiety)
+
+#This allows you to see the characteristics of your variables underneath the chunk
+summary(anxiety)
+
+```
+
+anxiety is a tibble/dataframe with 40 rows(observations) and 8 columns(variables). Here you can also see how each variable is classified by R. 
+
+* `<dbl>` double - real number
+* `<lgl>` logical - true/false
+* `<chr>` character or string
+
+
+*Cleaning and reformatting data*
+* NAs
+* Classifying Variables
+
+After you take a look at your data, you will recognize that some of your variables are missing and or they are not in the right category. For example: age was mistakenly categorized as discrete variable; Subject ID was mistakenly categorized as continous variable. 
+
+This is how you replace some NAs and reclassify variables in this section. 
+Let's look at one variable. To refer to a particular variable column in your dataframe use `$`, as in `Dataframe$Variable`
+
+
+```{r}
+#Reclassifying variables
+anxiety$Subject_ID <- as.factor(anxiety$Subject_ID)
+anxiety$Age <- as.numeric(anxiety$Age)
+anxiety$Treatment_Group <- as.character(anxiety$Treatment_Group)
+
+
+#Replacing NAs; One of the reasons why you need to remove NA is because you might have to compute statistics that only takes in numeric variable. AKA This prevents us from calculating the mean or getting summary statistics
+#Via indexing 
+anxiety$Subject_ID[anxiety$Subject_ID == "NA"] <- "ID9999"
+
+#Removing while computing mean
+mean(anxiety$Age, na.rm = TRUE)
+
+```
+
+
+*Index*
+Use square brackets `[ ]` to refer to specific instances. For example, to see all instances where someone has played the piano: 
+```{r, comment=NA}
+#This find the age of those whose stress level are greater than 20. 
+anxiety$Age[anxiety$Stress > 20]
+
+#Find the mean of the age of those whose stress level are greater than 20
+mean(anxiety$Age[anxiety$Stress >20])
+
+#[ ] can also serve as "trim" to your dataframe. For example if you only want to look at the age of those in the  placebo group. You can do this in two ways
+anxiety$Age[anxiety$Treatment_Group == "placebo"]
+mean(anxiety$Age[anxiety$Treatment_Group == "placebo"])
+
+#or
+
+newobject <- anxiety[21:40,]
+mean(newobject$Age)
+
+```
+
+You can also use the brackets to recode specific instances. You will have to do this when you have replicates and or you have some mistakes in your original dataframe. 
+
+we can recode specific instances by: 
+```{r, comment=NA}
+anxiety$SES[anxiety$SES<5]<- NA
+
+anxiety$NEWGROUP[anxiety$Drug_Use >20]<-"exp group"
+
+```
+
+
+Okay! Now that we've gone through some basic functions and syntax using the anxiety dataset, we will try similar commands using an open COVID-19 dataset. Below, you will find 10 tasks that use similar functions you have learned above and 
+
+
+###Task 1: Where is your working directory? Set your working directory to the folder in which your coronavirus.xlsx exists. (code will vary)
+
+```{r}
+setwd("PATH/TO/YOUR/DATASET")
+```
+
+
+###Task 2: Import the coronavirus data from your laptop by using the read in function and store it as "corona". 
+```{r}
+
+corona <- readxl:::read_excel("/PATH/coronavirus_dataset_shortened.xlsx", col_types = c("text", "text", "numeric","numeric", "date", "numeric", "text"))
+
+corona$Province.State <- as.character(corona$Province.State)
+
+```
+
+
+###Task 3: install these three packages psych, dplyr, ggplot2 and library them
+```{r}
+if(!require("psych")) install.packages("psych"); library(psych)
+if(!require("dplyr")) install.packages("dplyr"); library(dplyr)
+if(!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+library(tidyverse)
+
+
+corona %>% filter(Country.Region=="Japan") %>% ggplot(aes(x=date, y=cases ,color=type)) + geom_point() + geom_line()
+```
+
+
+
+###Task 4: Examine your dataframe. Use the summary function first and reclassify any variables if necessary
+```{r}
+View(corona)
+
+#To view the class of each variable, type out the stored variable
+corona
+
+#Reclassify variables, is everything in the right category? If not, modify it 
+
+corona$Country.Region <- as.character(corona$Country.Region)
+corona$Lat <- as.numeric(corona$Lat)
+
+class(corona$Country.Region)
+```
+
+
+Alright!! Well done! You've completed the first 4 tasks. Now you are ready to move on to harder tasks. Recall the slides on indexing and filtering. Now we will come up with some commands that helps you subet a new data by filtering and indexing based on your conditional statements
+
+
+
+###Task 5: Subsetting a new dataframe called corona_france : I want to examine only look at the confirmed cases in France. Then use the sum() function to find out how many total confirmed cases.  
+
+```{r}
+#Using the filter function
+corona_france <- filter(.data= corona, corona$Country.Region == "France")
+corona_france <- filter(.data= corona_france, corona_france$type == "confirmed")
+
+#Using the [ ] indexing methods
+corona_france <- corona[1:89,]
+
+#View your dataframe to make sure you have all the dataframe up till 4/19
+View(corona_france)
+
+#sum(the column in the dataframe you want to calculate)
+sum(corona_france$cases)
+
+summary(corona_france$cases)
+
+```
+
+
+###Task 6: Using the filter function again. I want you to find all the days in which confirmed cases are more than 5000 and store that back to corona_france object
+
+```{r}
+corona_france <- filter(.data = corona_france, corona_france$cases > 5000)
+
+```
+
+
+
+###Task 7: news coverage! Adding additional information to your original dataframe.I want to incorporate a new column called new coverage percentage into the original dataframe. There are multiple ways of doing the same exact thing, try a few on your own!
+```{r}
+#Randomly generate 89 numbers that range from 1 to 100 as your new coverage percentage values
+newscoverage <- sample(1:100, 89, replace =TRUE)
+
+corona_france$newscoverage <- newscoverage
+corona_france <- cbind(corona_france, newscoverage)
+corona_france["newscoverage"] <- newscoverage
+
+
+#Your turn to try! Find the mean and standard deviation of newscoverage for France!
+
+```
+
+
+
+##Homework for next lesson! 
+
+1. Create another smaller dataframe for Japan, US, and South Korea
+2. Create a separate dataframe for China
+3. Find the mean of confirmed cases for each city in China
+
+
+```{r}
+Japan <- 
+  
+
+US <-
+  
+  
+South_Korea <-
+  
+  
+```
+
+
+

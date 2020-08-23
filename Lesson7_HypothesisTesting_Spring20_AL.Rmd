@@ -1,0 +1,455 @@
+---
+title: "Lesson7_HypothesisTesting_Spring20_AL"
+author: "Austin Luor"
+date: "5/30/2020"
+output: html_document
+---
+Resources: 
+<http://sphweb.bumc.bu.edu/otlt/MPH-Modules/BS/R/R-Manual/R-Manual10.html>
+<https://data-flair.training/blogs/t-tests-in-r/>
+<http://statsthinking21.org/> Russel Poldrack
+<https://www.statisticssolutions.com/conduct-interpret-one-sample-t-test/>
+<https://lindeloev.github.io/tests-as-linear/#41_one_sample_t-test_and_wilcoxon_signed-rank>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Objectives
+
+Now that we talked about pearson correlation coefficient, let's talk about comparison of the mean. This could be a little bit intimidating but it is actually not that hard to understand! We will be goingthrough some concepts of student t-test, ANOVA, and Chi square test.  
+
+1. Purpose of comparing mean
+2. Null Hypothesis testing
+3.a.Student t-test [concept + syntax]
+3.b.One-Sample t Test
+3.c.paired t-test [concept + syntax]
+
+##Setting Environment 
+```{r}
+#Library necessary pacakges 
+if(!require("dplyr")) install.packages("dplyr"); library(dplyr)
+if(!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+if(!require("tidyverse")) install.packages("tidyverse");library(tidyverse)
+if(!require("patchwork")) install.packages("patchwork");library(patchwork)
+
+## Setting up the environment: anxiety & Corona
+
+#Setting the anxiety data for plotting. Run this section if your environment is cleaned. 
+anxiety <- read.csv("/Users/austinluor/Desktop/R_Workshop/Data/Fake_Study_Data.csv")
+#Classifying the variables
+anxiety$Subject_ID <- as.factor(anxiety$Subject_ID)
+anxiety$Age <- as.numeric(anxiety$Age)
+anxiety$Treatment_Group <- as.character(anxiety$Treatment_Group)
+
+
+#Creating a new catagorical variable 
+anxiety$agegroup <- NA
+anxiety$agegroup[anxiety$Age < 25] <- "YA"
+anxiety$agegroup[anxiety$Age > 25] <- "MA"
+anxiety$agegroup[anxiety$Age > 45] <- "OA"
+
+
+#################
+#Setting the coronavirus dataset for plotting. 
+corona <- readxl:::read_excel("/Users/austinluor/Desktop/R_Workshop/Data/coronavirus_dataset_shortened.xlsx", col_types = c("text", "text", "numeric","numeric", "date", "numeric", "text"))
+
+#Reclassify variables, is everything in the right category? If not, modify it 
+corona$Province.State <- as.character(corona$Province.State)
+corona$Country.Region <- as.character(corona$Country.Region)
+corona$Lat <- as.numeric(corona$Lat)
+corona$Long <- as.numeric(corona$Long)
+corona$cases <- as.numeric(corona$cases)
+corona$type <- as.character(corona$type)
+
+#Using the filter function to create a smaller dataframe for France
+corona_france <- filter(.data= corona, corona$Country.Region == "France")
+corona_france <- filter(.data= corona_france, corona_france$type == "confirmed")
+newscoverage <- sample(1:100, 89, replace =TRUE)
+
+corona_france$newscoverage <- newscoverage
+corona_france <- cbind(corona_france, newscoverage)
+corona_france["newscoverage"] <- newscoverage
+
+
+#Create another smaller dataframe for Japan, US, and South Korea
+Japan <- filter(.data= corona, corona$Country.Region == "Japan")
+US <- filter(.data= corona, corona$Country.Region == "US")
+France <- filter(.data= corona, corona$Country.Region == "France")
+South_Korea <- filter(.data= corona, corona$Country.Region == "Korea, South")
+
+#Create a separate dataframe for China
+China <- filter(.data= corona, corona$Country.Region == "China")
+
+#QUESTION 3
+#Find out how many total cities are there: using this function will tell us how many distinct items are in the column. In this case, there are 5 unique cities in this dataframe
+n_distinct(China$Province.State)
+
+#3. Find the mean of confirmed cases for each city in China
+China_confirmed <- filter(.data= China, China$type == "confirmed")
+
+mean(China_confirmed$cases[China_confirmed$Province.State == "Anhui"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Beijing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Chongqing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Fujian"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Gansu"])
+
+```
+
+##Why do we compare means?
+
+In statistical testing, we often want to see if there is a difference between the means of two groups due to a manipulation. For example in a clinical setting, you might be interested in seeing an effect of a drug that reduces cholesterol levels, so you give drug A to one experimental group and compare their cholesterol level to a control group that did not receive the drug. You compare the means between these two groups to justify whether or not the drug has no effect. This is the general idea of what we think of in terms of statistical testing, but there is more technical details that we will get into! 
+
+Tip: *You are making inferences about a population mean from a sample*
+
+##Null Hypothesis testing
+
+The process of null hypothesis testing is counterintuitive, but it is not too hard to understand. For this lesson, consider the same scenario: Does eating Chick-fil A before GRE exam boost your score? 
+
+In order to test this, we have to set up a null hypothesis that is quite opposite to your initial expectation. Let's go through this step by step. 
+
+* Process of Null Hypothesis Testing
+    + Come up with a hypothesis that embodies our prediction
+        - *Eating Chick-fil A has an effect on GRE scores*
+    + Data collection
+        - *Assign two random groups: Eat Chick fil A before exam group and don't eat chick fil A before exam group*
+    + Specify null and alternative hypothesis
+        - *Null = Chick-fil A has no effect on GRE scores*
+        - *Alt = Chick-fil A has an effect on GRE scores*
+    + Fit a model to data that represents the alt hypothesis and compute a t-test
+    + Compute the probability of the observed value of that statistic assuming that the null hypothesis is true
+    + Assess everyone's favorite: p
+    
+ 
+Creating a dataframe. 20 subjects in total: 10 ate before exam, 10 didn't eat before exam, and their resulting GRE scores (340 is the total on GRE)
+```{r, eval=TRUE, echo= FALSE, message= FALSE}
+
+
+sampleA <- data.frame(subject=c(1,2,3,4,5,6,7,8,9,10),
+                     group=c("Y","Y","Y","Y","Y","Y","Y","Y","Y","Y"),
+                     score=c(315,311,308,332,312,320,325,330,327,320))
+            
+sampleB <-data.frame(subject=c(11,12,13,14,15,16,17,18,19,20),
+                     group=c("N","N","N","N","N","N","N","N","N","N"),
+                     score=c(305,312,330,301,305,308,312,321,311,320))
+
+```
+
+One thing I'd like to note is that you can totally run this experiment differently. You can have only 10 subjects and have them eat chick fil a and take GRE and then have them don't eat and take the GRE exam again to see what are the differences between eating chick-fil a. If you choose to run this approach, then you will have to run a paired t-test because your observations are not entirely independent (means that your subject were exposed to the two difference conditions).
+
+###Null vs Alternative
+
+Now, consider our null hypothesis testing in a non-directional hypothesis: This means that if alternative hypothesis is true, we just know that the effect does something to our score but we don't know if it improves or worsen their GRE score.  
+
+*H0 : EAT_SCORE = NO_EAT_SCORE * 
+*H1 : EAT_SCORE != NO_EAT_SCORE *
+
+You can also create a directional hypothesis, which predicts where the direction the difference would go. This could be assumed if you have strong prior knowledge that chick fil-a boosts verbal and quantitative reasoning skills.
+
+*H0 : EAT_SCORE >= NO_EAT_SCORE * 
+*H1 : EAT_SCORE < NO_EAT_SCORE *
+
+For this lesson, we will take a non-directional hypothesis approach because we just want to know if it has an effect. 
+
+
+Now, before we dive deeper, let's just look at the mean, std for both groups. Here, I am also incorporating a boxplot for our observation as for now. 
+```{r, eval= TRUE, echo= FALSE, message= FALSE}
+
+sampleASummary <- sampleA %>% summarise(
+  N = length(sampleA$score),
+  mean = mean(sampleA$score),
+  sd = sd(sampleA$score)
+)
+
+sampleBSummary <- sampleB %>% summarise(
+  N = length(sampleB$score),
+  mean = mean(sampleB$score),
+  sd = sd(sampleB$score)
+)
+
+print(rbind(sampleASummary, sampleBSummary))
+
+#Boxplot
+ggplot(sampleA, mapping = aes(x=sampleA$group)) + geom_boxplot(aes(y=sampleA$score), width=0.2) + geom_point(aes(y=sampleA$score)) + labs(x="Y Group", y="GRE Score", title="Chick Fil A on GRE scores") + ylim(290,345)
+
+#violin plot / newest version control
+All <- rbind(sampleA,sampleB)
+
+ggplot(All, mapping = aes(x=All$group)) + 
+  geom_violin(aes(y=score, fill=group), alpha=0.5) +
+  geom_point(aes(y=score)) + 
+  labs(x=" Group", y="GRE Score", title=" Chick Fil A's impact on GRE scores") +
+  ylim(290,345) 
+
+
+
+```
+
+Looking at the mean and the distribution of these two groups, we see that not eating chick-fil a before an exam yields a lower GRE score. *I'd love to believe it!* But since we are scientists and members of the Peelle Lab, we should take a step further and examine these two groups. Before I jump in and talk more about t-statistics, let's consider this normal distribution and degrees of freedom:
+
+
+###Degrees of freedom
+For all the statistic testing that we do, we are trying to make inferences about our general population from the sample size that we have. Thererfore, the more participants that you run, the closer your curve will be to represent the population (normal distribution). This is also why we want a greater effect size: so that it can accurately estimate the population.
+```{r, eval=TRUE, echo= FALSE}
+# Display the Student's t distributions with various
+# degrees of freedom and compare to the normal distribution
+
+x <- seq(-4, 4, length=100)
+hx <- dnorm(x)
+
+degf <- c(1, 3, 10, 30)
+colors <- c("red", "magenta", "purple", "pink", "black")
+labels <- c("df=1", "df=3", "df=8", "df=30", "normal dis")
+
+plot(x, hx, type="l", lty=2, xlab="Standard Deviation",
+  ylab="Density/Frequency", main="Comparison of t Distributions")
+
+for (i in 1:4){
+  lines(x, dt(x,degf[i]), lwd=3, col=colors[i])
+}
+
+legend("topleft", inset=.05, title="Distributions",
+  labels, lwd=2, lty=c(1, 1, 1, 1, 2), col=colors)
+
+
+
+```
+
+###Probability function
+
+
+```{r, eval=TRUE, echo= FALSE}
+#Lower end
+curve(dnorm(x, mean = 310, sd = 10), xlim = c(280, 360))
+abline(h = 0)
+sequence <- seq(0, 290, 0.1)
+polygon(x = c(sequence,290,0),
+        y = c(dnorm(c(sequence),310,10),0,0),
+        col = "grey")
+
+#Mean
+curve(dnorm(x, mean = 310, sd = 10), xlim = c(280, 360))
+abline(h = 0)
+sequence <- seq(300, 320, 0.1)
+polygon(x = c(sequence,320,300),
+        y = c(dnorm(c(sequence),310,10),0,0),
+        col = "grey")
+
+#Upper end
+curve(dnorm(x, mean = 310, sd = 10), xlim = c(280, 360))
+abline(h = 0)
+sequence <- seq(330, 340, 0.1)
+polygon(x = c(sequence,340,330),
+        y = c(dnorm(c(sequence),310,10),0,0),
+        col = "grey")
+
+#Now we transform that into a normal distribution: mean becomes 0 and std is 1
+if(!require("ggfortify")) install.packages("ggfortify"); library(ggfortify)
+ggdistribution(dnorm, seq(-4, 4, 0.01), mean = 0, sd = 1) 
+
+```
+
+##T-statistic: Computation 
+
+Now that we understand how to interpret the probability function, we need a test statistic that allows us to test for a difference between two means. Here is the process of computing a t-test:
+
+1. Find the mean of two groups 
+2. Find the standard deviation of two groups
+3. Plug them into the t-statistics formula: 
+*T stats = (Mean of group A - Mean of group B) / sqrt([std A^2/sample size A] + [std B^2/sample size B])*
+4. Find the <critical value> for experiment, (using degrees of freedom and the alpha value)
+5. Determine if your t-statistic is within or not within the range of your critical value. 
+
+Let's go through this step by step! 
+
+Tip: Essentially you are taking the MeanDifference / the estimated variance of two groups to obtain a t-stats value. You want the Mean difference to be *big* and the estimated variance to be *small*. You want a greater numerator and smaller denominator to yield a larger t-statistic (The mean of two groups to be really far away from each other and the variance of each group to be small) 
+
+
+*POP QUIZ: DO YOU KNOW WHY WE HAVE TO SQUARE THE STANDARD DEVIATION FOR EACH SAMPLE?*
+
+```{r, eval=TRUE, echo= TRUE}
+#Recall our dataset for two groups
+sampleA <- data.frame(subject=c(1,2,3,4,5,6,7,8,9,10),
+                     group=c("Y","Y","Y","Y","Y","Y","Y","Y","Y","Y"),
+                     score=c(315,311,308,332,312,320,325,330,327,320),
+                     score_deviantA = (sampleA$score - mean(sampleA$score)))
+            
+sampleB <-data.frame(subject=c(11,12,13,14,15,16,17,18,19,20),
+                     group=c("N","N","N","N","N","N","N","N","N","N"),
+                     score=c(305,312,330,301,305,308,312,321,311,320),
+                     score_deviantB = (sampleB$score - mean(sampleB$score)))
+
+cbind(sampleA, sampleB)     
+         
+#Compute the mean difference between two groups
+MeanSampleA <- mean(sampleA$score)
+MeanSampleB <- mean(sampleB$score)
+
+MeanSampleA- MeanSampleB
+#Compute the variance of each group which is just the standard deviation
+stdA <- sd(sampleA$score)
+stdB <- sd(sampleB$score)
+
+#Compute the t statistic:
+(MeanSampleA - MeanSampleB) / sqrt((stdA^2)/10 + (stdB^2)/10)
+
+```
+
+For our example: 
+T-statistic = (320 - 312.5) / sqrt((8.37987^2)/10 + (8.83490^2)/10) = 1.947705
+
+In R, you can also just compute this syntax to get a T-test result. But looks different between the two calcuations that we did? 
+```{r, eval=TRUE, echo= TRUE}
+# OR this is the basic syntax to compute a t-test in R 
+t.test(sampleA$score, sampleB$score, var.equal = TRUE)
+
+```
+Did you find something weird in the two sample t-test summary chart? 
+You're right! The degrees of freedom looks weird. Since we have two groups and each group has 10 participant, our degrees of freedom should be 18 (since df:(10-1) + (10-1)). But why is it that when we compute t.test(), the df is *17.95*?
+
+This is due to variance assumptions. In a t-test, we are assuming the variances are equal within each group. Recall the idea of homoscedasticity, essentially you want your observations to be "spread out equally" in no particular order to ensure that your data is not skewed. The reason why R automatically adjusted this value to 17.95 is to account for the unequal variance within a small sample size. 
+
+
+###Critical Value
+
+Now that we have the t-stats, we need to determine if we can fully reject the null hypothesis. But first, you need to obtain a critical value. To determine a critical value, use qt(1-alpha value/2, df) if you have two tailed hypothesis. Use qt(1-alpha value, df) if you have one tailed. 
+
+```{r, eval=TRUE, echo=TRUE}
+#The critical value on the upper tail
+qt(1-.05/2,18)
+
+#The critical value on the lower tail 
+qt(.05/2,18)
+
+```
+We get 2.100922 for the upper tail and -2.100922 for the lower tail. In order for us to reject the null hypothesis, our t-stats must be *GREATER THAN* 2.100922 or *LESS THAN* -2.100922.  
+
+In our case 1.9477 is not greater than 2.100922, and is not less than -2.100922 so we CANNNOT reject the null. 
+
+###Rejecting null or accepting the null
+
+If it was greater than 2.100922 or less than -2.100922, then our p-value will be less than 0.05. This means that if you perform the experiment 100 times, there are 5 times that *(H0 is TRUE)* the mean difference is NOT significant. 95 times that *(H0 is FALSE)* is mean difference is significant. More confidence to reject null such that H1 is true.
+
+If it was NOT greater than 2.100922 or NOT smaller than -2.100922, our p-value will be greater than 0.05. This means that if you perform the experiment 100 times, there are 5 times that *(H0 is FALSE)* the mean difference is significant, 95 times that *(H0 is TRUE)* the mean difference is NOT significant. 
+
+Interpretation: In our case we cannot reject the null. This means that if we do this experiment 100 times, 95% of the time that we see Chick- Fil A is not going to increase GRE scores. Once this is established then you can also say that less than 5% of the time that we see chick fil a is going to increase GRE score. 
+
+
+One thing you want to note is that 1.9477 is actually pretty close to 2.100922 and we see a p-value of 0.06. This is very close to rejecting the null so usually researchers will examine further by increasing the effect size of your study etc. But you get the idea! 
+
+
+##Selecting the right t-test to perform
+
+There are multiple t-test types that you need to consider when you are running your analysis. The one we just did was an independent T- test because each groups was assigned to only ONE specific experimental condition. Let's go through these different t-test and understand why we use them! 
+
+
+###One-sample t Test
+
+Syntax: t.test(y,mu=3) # H0: mu=3
+
+There are some typical applications of the 1-sample t-test:
+1) testing a sample a against a pre-defined value
+2) testing a sample against an expected value
+3) testing a sample against common sense or expectations
+4) testing the results of a replicated experiment against the original study.
+
+Essentially, you are comparing one sample mean against a population. Consider this scenario, you have one chick fil-A spicy chicken burger and you want 10 people to guess its calories. You would record these 10 people's guesses and then compare to the actual calories of the burger. 
+
+To calculate the t-stats for one sample t test, 
+(mean of your sample - mean of a predefined value) / sample standard deviation/sqrt (total # of observations))
+
+```{r, eval=TRUE, echo= TRUE}
+caloriesguess <- data.frame(cal=c(500,600,450,475,850,900,1000,550,650,750))
+t.test(caloriesguess, mu=675)
+
+#Calculating the t stats using raw formula. See if this confirms with using the t.test function above
+(672.5 - 675) / (sd(caloriesguess$cal/sqrt(10)))
+
+```
+If the calories of a burger is actually 675... then
+Null: mu = 675
+alt: mu != 675
+
+If null hypothesis is rejected, then the conclusion would be: either this group of 10 people overestimate or underestimate the calories of the burger.
+
+###Paired T-test (which is really just a one sample t-test)
+
+Syntax: t.test(y1,y2,paired=TRUE) # where y1 & y2 are numeric
+
+The purpose of using a paired t-test is that you want to examine within-subject differences. Take our chick-fil A example: Instead of assigning two groups, you have one sample of 20 people. You have 20 people take GRE without eating Chick-fil-A and then you have the SAME 20 people take GRE after eating Chick-Fil-A. Then you examine the mean of the GRE scores to see if it is different due to condition. 
+
+T statistics of paired t test
+(mean of before - mean of after) / (standard error of differences) / sqrt(number of observations))
+
+```{r, eval=TRUE, echo= TRUE}
+pairedbefore <- rnorm(20, mean=310, sd=10)
+pairedafter <- rnorm(20, mean=320, sd=10)
+
+t.test(pairedbefore,pairedafter, paired = TRUE)  
+```
+
+This following section is just to confirm the t-stats and mean differences are accurate: 
+```{r}
+#Difference between two means
+diff <-mean(pairedbefore) - mean(pairedafter)
+
+#Calculating the actual t statis
+diff/ ((sd(pairedbefore-pairedafter))/sqrt(20))
+
+
+
+```
+
+
+## Task 1: Anxiety differences between two groups
+Use your knowledge of hypothesis testing and examine the differences of two groups
+1. Compute a t test looking at two group's stress levels
+```{r}
+#Filter out two groups
+treatment <- anxiety %>% filter()
+placebo <- anxiety %>% filter()
+
+#Computing t-test of stress
+t.test(         $Stress,       $Stress, paired= FALSE)
+
+#Computing t-test of self reported anxiety
+t.test(               , placebo$          , paired = FALSE)
+
+#Computing t-test of age
+t,test()
+
+```
+
+
+## Task 2: Differences of two experimental conditions of one group
+Let's pretend that we are only intereted in the treatment group of 20 subjects. You want to see the difference of stress level before and after using a new drug called: AMAZING-MEDS. Values in Stress col is before using the drug, values in the Drug_use col represents after using this AMAZING-MEDS. You now need to do some stats-test to see if this treatment is effective. 
+```{r}
+#Paired t test 
+t.test(      ,    , paired = TRUE)
+
+#Plotting the differences
+treatment %>% 
+  select(      ) %>% #selecting only 3 cols: ID, Stress, Drug_Use
+  gather(key=       , value=       , -Subject_ID) %>% #Gathering the data to long format
+  ggplot(aes(x=       , y=       , fill=         )) + geom_boxplot(width=0.2) + scale_x_discrete(limit= c("Stress", "Drug_Use")) + theme_classic() 
+
+#or using ggpaired()
+treatment %>% 
+  select(1,7,8) %>% 
+  ggpaired(treatment, cond1 = "Stress", cond2 = "Drug_Use", width = 0.1, line.color = "gray", line.size = 0.4, palette = "npg") + stat_compare_means(paired = TRUE, label.x = 0.90)
+
+```
+
+## Task 3: Find the differences in the confirmed cases for different countries
+```{r}
+#Find the differences of confirmed cases for Japan and South Korea
+t.test(       $cases[Japan$ =="confirmed"], South_Korea$       [       $type =="confirmed"], paired=      )
+
+#Find the differences of confirmed cases for US and South Korea
+t.test(          [US$type =="confirmed"],                   , paired=FALSE)
+
+#Find the differences of confirmed cases for France and US
+
+
+```
+

@@ -1,0 +1,304 @@
+---
+title: "Lesson2_PlottingData_AnswerKey_Spring20_AL"
+author: "Austin Luor"
+date: "4/30/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Answer Key for homework from lesson 1! We are going to use some of these information to plot as well. 
+
+1. Create another smaller dataframe for Japan, US, and South Korea
+2. Create a separate dataframe for China
+3. Find the mean of confirmed cases for each city in China
+
+```{r}
+#QUESTION 1 
+Japan <- filter(.data= corona, corona$Country.Region == "Japan")
+US <- filter(.data= corona, corona$Country.Region == "US")
+France <- filter(.data= corona, corona$Country.Region == "France")
+South_Korea <- filter(.data= corona, corona$Country.Region == "Korea, South")
+
+#QUESTION 2
+China <- filter(.data= corona, corona$Country.Region == "China")
+
+#QUESTION 3
+#Find out how many total cities are there: using this function will tell us how many distinct items are in the column. In this case, there are 5 unique cities in this dataframe
+n_distinct(China$Province.State)
+
+#Created another dataframe that consists only the confirmed cases. 
+China_confirmed <- filter(.data= China, China$type == "confirmed")
+
+mean(China_confirmed$cases[China_confirmed$Province.State == "Anhui"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Beijing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Chongqing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Fujian"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Gansu"])
+
+```
+
+
+## Lesson 2: Plotting using ggplot
+Objectives for lesson 2
+1. Get familiar with ggplot syntax
+
+
+Before we start our lesson, I just want to remind you that there are more than 1 plotting packagaes in the R world. ggplot is just one of the many ways to plot. You have the flexibility to choose whichever pacakge you want to work with, whether that is base R, viridis, ggstatsplot, ggpubr...etc. 
+
+Recall that ggplot takes an overal formula: 
+*ggplot(data = yourdata, mapping = aes(x= independent variable, y= dependent variable, customization)) + customization* 
+Recall that last time we used geom_point() and geom_smooth() to plot out individual data points and use a linear line to denote the trend of your data. We also specified method = 'lm' and se" FAlSE for R to execute. 
+
+Thinking ahead, what types of data would you be able to plot with using the syntax that we have specified above?
+
+Still worried about this syntax? Don't worry, we will be going this over and over until you are super comfortable. Once you understand this structure and when you gain more experience in trial-and-error, you will go a long way in plotting! 
+
+
+
+## Setting up the environment: anxiety & Corona
+```{r}
+#Library necessary pacakges 
+if(!require("dplyr")) install.packages("dplyr"); library(dplyr)
+if(!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+library(tidyverse)
+library(patchwork)
+
+#Setting the anxiety data for plotting. Run this section if your environment is cleaned. 
+anxiety <- read.csv("/Users/austinluor/Desktop/R_Workshop/Data/Fake_Study_Data.csv")
+#Classifying the variables
+anxiety$Subject_ID <- as.factor(anxiety$Subject_ID)
+anxiety$Age <- as.numeric(anxiety$Age)
+anxiety$Treatment_Group <- as.character(anxiety$Treatment_Group)
+
+#################
+#Setting the coronavirus dataset for plotting. 
+corona <- readxl:::read_excel("/Users/austinluor/Desktop/R_Workshop/Data/coronavirus_dataset_shortened.xlsx", col_types = c("text", "text", "numeric","numeric", "date", "numeric", "text"))
+
+#Reclassify variables, is everything in the right category? If not, modify it 
+corona$Province.State <- as.character(corona$Province.State)
+corona$Country.Region <- as.character(corona$Country.Region)
+corona$Lat <- as.numeric(corona$Lat)
+corona$Long <- as.numeric(corona$Long)
+corona$cases <- as.numeric(corona$cases)
+corona$type <- as.character(corona$type)
+
+#Using the filter function to create a smaller dataframe for France
+corona_france <- filter(.data= corona, corona$Country.Region == "France")
+corona_france <- filter(.data= corona_france, corona_france$type == "confirmed")
+
+#Randomly generate 89 numbers that range from 1 to 100 as your new coverage percentage values
+newscoverage <- sample(1:100, 89, replace =TRUE)
+
+corona_france$newscoverage <- newscoverage
+corona_france <- cbind(corona_france, newscoverage)
+corona_france["newscoverage"] <- newscoverage
+
+```
+
+
+##ggplot2
+Section derived from <https://raw.githubusercontent.com/ntaback/UofT_STA130/master/week1/introtogglot.Rmd>
+
+In ggplot2, the structure of the code to produce most plots is
+
+```{r, eval=F}
+ggplot(data= datset, mapping = aes(x=variable1, y=variable2)) +
+  geom_ofyourchoice( ) +
+  other aesthetics 
+```
+
+### Some `ggplot` vocabulary:
+
+**aesthetic** -- mapping between a variable and where it will be represented on the graph (e.g., x axis, colour-coding, etc.) 
+
+**geometry** -- what are you plotting (e.g., points , lines, histogram, etc.)
+    - Every plot must have at least one geometry and there is no upper limit(unless you set one)
+    - You can keep on adding a geometry to a plot using `+`
+    
+##Histogram: plots of one variable at a time
+
+A plot to show the distribution of a numerical variable: histogram
+
+- Count the number of numerical values that lie within ranges, called bins.
+- Bins are defined by their lower bounds (inclusive); the upper bound is the lower bound of the next bin
+- Histogram displays the distribution (count (default) or `density`) of the numerical values in the bins 
+- Horizontal axis is numerical, hence no gaps
+- Just need one aesthetic, `x`
+- Shape of the distribution: 
+    - could be symmetric, left-skewed, right-skewed (skew is to the direction of the longer tail) 
+    - number of modes (peaks): unimodal, bimodal, multimodal, uniform
+    - unusual observations
+
+Let's start with our first example! 
+By plotting one variable, you are telling R to count how many of those instances are in the entire dataframe. This means that you are looking at the frequency/occurence of each specific intances. 
+
+geom_col()
+```{r}
+#Simplest form
+ggplot(data=anxiety, mapping = aes(x=anxiety$Subject_ID, y=anxiety$Age))
+
+#To display your bar plots, you will have to add another layer to your syntax
+ggplot(data=anxiety, mapping = aes(x=anxiety$Subject_ID, y=anxiety$Age)) + geom_col()
+
+#Let's see if I can make this graph a little bit more informative by changing some colors
+ggplot(data=anxiety, mapping = aes(x=Subject_ID, y=Age, fill= Treatment_Group)) + geom_col()
+
+#Lets get rid of the ugly background
+ggplot(data=anxiety, mapping = aes(x=Subject_ID, y=Age, fill= Treatment_Group)) + geom_col() + theme_classic() 
+
+#Let's increase the limit of y-axis from age 0 - 100; adding ylim() and xlim()
+ggplot(data=anxiety, mapping = aes(x=Subject_ID, y=Age, fill= Treatment_Group)) + geom_col() + theme_classic() + ylim(0,100)
+
+#Let's make the bars a little more transparent; alpha = 0-1
+ggplot(data=anxiety, mapping = aes(x=Subject_ID, y=Age, fill= Treatment_Group)) + geom_col(alpha=0.5) + theme_classic() + ylim(0,100)
+
+#You can also store each ggplot as an object and then add them together. 
+plot1 <- ggplot(data=anxiety, mapping = aes(x=Subject_ID, y=Age, fill= Treatment_Group)) + geom_col(alpha=0.5) + theme_classic() + ylim(0,100)
+
+plot2 <- ggplot(data=anxiety, mapping = aes(x=Subject_ID, y=Age, fill= Treatment_Group)) + geom_col(alpha=0.5) + theme_classic() + ylim(0,100)
+
+#Add them together by using patchwork package. 
+(plot1|plot2)
+
+```
+
+Boxplot
+
+Use geom_boxplot() as the geometry and add it to your ggplot frame. 
+```{r}
+#Simplest form
+ggplot(data=anxiety, mapping = aes(x=Treatment_Group, y=Stress))
+
+#Adding geom_boxplot() to your simplest form
+ggplot(data=anxiety, mapping = aes(x=Treatment_Group, y=Stress)) + geom_boxplot()
+
+#You can also change the colors and the width of the box. 
+ggplot(data=anxiety, mapping = aes(x=Treatment_Group, y=Stress, fill=Treatment_Group)) + geom_boxplot(width=0.2)
+
+boxplot <- ggplot(data=anxiety, mapping = aes(x=Treatment_Group, y=Stress, fill=Treatment_Group)) + geom_boxplot(width=0.2, alpha=0.5)
+
+#What if I want to show individual datapoint? Let's use geom_point function
+boxplot + geom_point(aes(color=Treatment_Group))
+
+
+#Lets see what is the difference between geom_point and geom_jitter?
+boxplot + geom_jitter(aes(color=Treatment_Group), width = 0.05)
+
+#What if I want to change the order of the labels on my x-axis?
+boxplot + geom_jitter(aes(color=Treatment_Group), width = 0.05) + scale_x_discrete(limit=c("treatment", "placebo"))
+
+#Add plot titles and rename x-y axis 
+boxplot + geom_jitter(aes(color=Treatment_Group), width = 0.05) + scale_x_discrete(limit=c("treatment", "placebo")) + 
+  xlab("Treatment Group") + 
+  ylab("Stress Index") + 
+  labs(title = "Stress Index for Two Groups")
+
+
+```
+
+
+###line plots!
+You want to make sure that both axies contain continous variables
+
+```{r}
+#Simplest form
+ggplot(data = anxiety, mapping = aes(x=Anxiety_SelfReport, y=Stress))
+
+#Adding geom_point() to see how it correlates with each other
+ggplot(data = anxiety, mapping = aes(x=Anxiety_SelfReport, y=Stress)) + geom_point()
+
+#What if I want to visualize the difference between treatment and placebo group based on these dots?
+ggplot(data = anxiety, mapping = aes(x=Anxiety_SelfReport, y=Stress, color=Treatment_Group)) + geom_point()
+
+line <- ggplot(data = anxiety, mapping = aes(x=Anxiety_SelfReport, y=Stress, color=Treatment_Group)) + geom_point()
+
+#Let's add a line to see the overall trend to this correlation plot
+line + geom_smooth(method = "lm", se=TRUE)
+
+#Using the geom_smooth function, you can also change how you want to model your lines
+line + geom_smooth(method = "loess", se=FALSE)
+
+#Since this is a correlation plot, let's remove the colors and just see how it all correlate to each other and then plot out pearson's coefficicent on the bottom of the plot
+ggplot(data = anxiety, mapping = aes(x=Anxiety_SelfReport, y=Stress)) + geom_point() + geom_smooth(method="lm", se=FALSE) + stat_cor(method = "pearson", label.x = 40, label.y = 3, size=3.5) + theme_classic()
+                   
+
+```
+
+
+##############
+YOUR TURN TO TRY!!!
+Using geom_col, geom_point/jitter, geom_boxplot, geom_smooth functions, to complete the following tasks. 
+
+##Task 1: There are three types of cases (confirmed, death, recovered) for each country. How many confirmed, death, recovered cases for Japan? Use geom_col()
+x-axis: Types of cases (confirmed, death, recovered)
+y-axis: confirmed cases
+```{r}
+#Start with the simplest form. Ask yourself: What do you need on your x and y axis?
+ggplot(data= Japan, mapping = aes(x=type, y=cases, fill=type)) + geom_col()  
+
+```
+
+##Task 2: Use the China_confirmed dataframe and plot out how many confirmed cases each city in China has.
+
+x-axis: all of the cities in China
+y-axis: # confirmed cases 
+
+```{r}
+ggplot(data= China_confirmed, mapping = aes(x= Province.State, y= cases      , fill=Province.State)) + geom_col()
+
+#Store the ggplot code into object "x"
+x <- ggplot(data= China_confirmed, mapping = aes(x= Province.State, y= cases      , fill=Province.State)) + geom_col()
+#Add plot title (Confirmed cases in 5 Chinese Cities), change the x-axis label (Cities), and change the y-axis label (Total Confirmed cases)
+x + labs(title = "Confirmed cases in 5 Chinese Cities") + xlab("Cities") + ylab("Total Confirmed cases")     
+
+```
+
+##Task 3: Now I want to see the progression of all cases in Japan. I want to see how confirmed, death, and recovered cases change as a function of time. 
+
+x-axis = date
+y-axis = number of all types of cases
+Each color to represent types of cases
+```{r}
+ggplot(data= Japan, mapping= aes(x=date, y=cases, color= type)) + geom_point() + geom_smooth(method="loess")
+```
+
+
+##Task 4:I want to see the progression of each country based on the types of cases. 
+
+```{r}
+#Confirmed cases in every country
+corona %>% 
+  filter(corona$type == "confirmed") %>%
+  ggplot(aes(x=date, y=cases, color=Country.Region)) + geom_point()
+
+#Recovered cases in every country
+corona %>% 
+  filter(corona$type == "recovered") %>%
+  ggplot(aes(x=date, y=cases, color=Country.Region)) + geom_point()
+  
+#Death cases in every country
+corona %>% 
+  filter(corona$type == "death") %>%
+  ggplot(aes(x=date, y=cases, color=Country.Region)) + geom_point()
+
+
+
+```
+
+##Task 5: Visualize all types of cases in China, and then facet wrap it based on Province.State. 
+
+
+```{r}
+#Try it with geom_boxplot()
+corona %>% 
+  filter(corona$Country.Region == "China") %>%
+  ggplot(aes(x=type, y= cases, fill=type)) + geom_boxplot() + facet_wrap(~Province.State)
+
+#Try it with geom_col()
+corona %>% 
+  filter(corona$Country.Region == "China") %>%
+  ggplot(aes(x=type, y= cases, fill=type)) + geom_col() + facet_wrap(~Province.State)
+```

@@ -1,0 +1,303 @@
+---
+title: "Lesson3_DataVisualization_AnswerKey_Spring20_AL"
+author: "Austin Luor"
+date: "5/2/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Lesson 3: Data Visualization
+
+For this lesson, we will continue to learn ggplot syntax. Hopefully you are more familiar with the syntax (simplest form, aesthetics, other customizations) by this point. If you are not, don't worry! 
+
+The objectives of this lesson: 
+1. Discrete x, continous y
+2. Visualizing Error
+3. Collapsing data using gather() 
+Continous x, Continous y
+4. Color and shapes
+5. Go crazy! 
+
+##Setting Environment 
+
+```{r}
+#Library necessary pacakges 
+if(!require("dplyr")) install.packages("dplyr"); library(dplyr)
+if(!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+library(tidyverse)
+library(patchwork)
+
+## Setting up the environment: anxiety & Corona
+
+#Setting the anxiety data for plotting. Run this section if your environment is cleaned. 
+anxiety <- read.csv("/Users/austinluor/Desktop/R_Workshop/Data/Fake_Study_Data.csv")
+#Classifying the variables
+anxiety$Subject_ID <- as.factor(anxiety$Subject_ID)
+anxiety$Age <- as.numeric(anxiety$Age)
+anxiety$Treatment_Group <- as.character(anxiety$Treatment_Group)
+
+
+#Creating a new catagorical variable 
+anxiety$agegroup <- NA
+anxiety$agegroup[anxiety$Age < 25] <- "YA"
+anxiety$agegroup[anxiety$Age > 25] <- "MA"
+anxiety$agegroup[anxiety$Age > 45] <- "OA"
+
+
+#################
+#Setting the coronavirus dataset for plotting. 
+corona <- readxl:::read_excel("/Users/austinluor/Desktop/R_Workshop/Data/coronavirus_dataset_shortened.xlsx", col_types = c("text", "text", "numeric","numeric", "date", "numeric", "text"))
+
+#Reclassify variables, is everything in the right category? If not, modify it 
+corona$Province.State <- as.character(corona$Province.State)
+corona$Country.Region <- as.character(corona$Country.Region)
+corona$Lat <- as.numeric(corona$Lat)
+corona$Long <- as.numeric(corona$Long)
+corona$cases <- as.numeric(corona$cases)
+corona$type <- as.character(corona$type)
+
+#Using the filter function to create a smaller dataframe for France
+corona_france <- filter(.data= corona, corona$Country.Region == "France")
+corona_france <- filter(.data= corona_france, corona_france$type == "confirmed")
+newscoverage <- sample(1:100, 89, replace =TRUE)
+
+corona_france$newscoverage <- newscoverage
+corona_france <- cbind(corona_france, newscoverage)
+corona_france["newscoverage"] <- newscoverage
+
+
+#Create another smaller dataframe for Japan, US, and South Korea
+Japan <- filter(.data= corona, corona$Country.Region == "Japan")
+US <- filter(.data= corona, corona$Country.Region == "US")
+France <- filter(.data= corona, corona$Country.Region == "France")
+South_Korea <- filter(.data= corona, corona$Country.Region == "Korea, South")
+
+#Create a separate dataframe for China
+China <- filter(.data= corona, corona$Country.Region == "China")
+
+#QUESTION 3
+#Find out how many total cities are there: using this function will tell us how many distinct items are in the column. In this case, there are 5 unique cities in this dataframe
+n_distinct(China$Province.State)
+
+#3. Find the mean of confirmed cases for each city in China
+China_confirmed <- filter(.data= China, China$type == "confirmed")
+
+mean(China_confirmed$cases[China_confirmed$Province.State == "Anhui"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Beijing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Chongqing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Fujian"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Gansu"])
+
+```
+
+##Discrete X, Continous Y 
+
+We actually went over geom_col() and geom_boxplot() last time which are included in this section. However, we are exploring other additional plot types in this lesson and see if we can make our plot more informative for our audiences. 
+
+1. geom_violin() 
+
+```{r}
+#Simplest Form
+ggplot(data=anxiety, mapping = aes(x=Treatment_Group, y=Stress, fill=Treatment_Group))
+
+#Adding the geom_violin() customization
+ggplot(data=anxiety, mapping = aes(x=Treatment_Group, y=Stress, fill=Treatment_Group)) + geom_violin(width=0.2, alpha=0.8)
+
+#Just having a violin plot is not too informative. Let's add a boxplot on top of the violin plot. 
+ggplot(data=anxiety, mapping = aes(x=Treatment_Group, y=Stress, fill=Treatment_Group)) + geom_violin(width=0.2, alpha=0.8) + geom_boxplot(fill="white", width=0.05)
+
+violin <- ggplot(data=anxiety, mapping = aes(x=Treatment_Group, y=Stress, fill=Treatment_Group)) + geom_violin(width=0.2, alpha=0.8) + geom_boxplot(fill="white", width=0.05)
+
+#Now, if you are a reviewer you might be wondering: Can you show all of your individual datapoints??! (Plots are pretty pointless, if you may). So Let's add some individual dots on this plot! 
+violin + geom_jitter(width=0.25)
+
+
+#anxiety %>% select(1:2,5,7, 9) %>% gather(key=stressvalue, value = Index, -Subject_ID, -Treatment_Group, -agegroup) %>% ggplot(aes(x=agegroup, y=Index, fill=stressvalue)) + geom_violin()
+```
+
+
+2. Visualizing error
+Since other functions such as geom_dotplot(), goem_boxplot(), geom_bar() all follow very similar formula, I will not specifically go over them. I mainly want to introduce how to add error bars to your plot and other ways of visualizing error. Let's start with boxplot again.
+
+Very similar to violin plot. Let's change the y-axis for this one. 
+```{r}
+#Simplest form
+ggplot(data=anxiety, mapping = aes(x=agegroup, y=Stress, fill=agegroup)) + geom_boxplot(width=0.2, alpha=0.5)
+
+boxplot2 <- ggplot(data=anxiety, mapping = aes(x=agegroup, y=Stress, fill=agegroup)) + geom_boxplot(width=0.2, alpha=0.5)
+
+#Changing the order of axis
+boxplot2 + scale_x_discrete(limit=c("YA","MA","OA"))
+
+#Increase the limit of y-axis
+boxplot2 + scale_x_discrete(limit=c("YA","MA","OA")) + ylim(0,50)
+
+#use geom_errorbar() function: errorbar() is tricky because you have to calculate the ymin and ymax first and then pass it into the function. 
+standarderror <-mean_se(anxiety$Stress)
+ymin <- standarderror$ymin
+ymax <- standarderror$ymax
+
+#Then pass it into the geom_errorbar() function: BUT WHAT IS THE PROBLEM??!?!
+boxplot2 + scale_x_discrete(limit=c("YA","MA","OA")) + ylim(0,50) + geom_errorbar(stat= "identity", aes(ymin=ymin, ymax=ymax), width=0.2, position = "dodge")
+#The standard of error was calculated as the whole group. Meaning that it is not unique to each age group. Therefore you will have one error bar for all three boxplot. Therefore, I personally like to use stat_summary better!
+
+#Using the stat_summary():
+#Pointrange; change the color to your choice
+boxplot2 + scale_x_discrete(limit=c("YA","MA","OA")) + ylim(0,50) + stat_summary(fun.y = mean, fun.ymin = min, fun.ymax = max, geom= "pointrange", colour = "blue", width=0.5)
+
+#Crossbar
+boxplot2 + scale_x_discrete(limit=c("YA","MA","OA")) + ylim(0,50) +  stat_summary(fun.y = mean, fun.ymin = min, fun.ymax = max, geom="crossbar", width=0.5)
+
+#Linerange
+boxplot2 + scale_x_discrete(limit=c("YA","MA","OA")) + ylim(0,50) +  stat_summary(fun.y = mean, fun.ymin = min, fun.ymax = max, geom="linerange", width=0.5)
+
+#Error bar
+boxplot2 + scale_x_discrete(limit=c("YA","MA","OA")) + ylim(0,50) +  stat_summary(fun.y = mean, fun.ymin = min, fun.ymax = max, geom="errorbar", width=0.5)
+
+```
+
+##Collapsing data: changing dataframe from wide to long format
+This is probably the most confusing syntax and data wrangling as a beginner. Trust me, I am still learning about this method. This is a rather powerful tool to plot especially when you want to display more information on the same plot. And ESPECIALLY important if you want to visualize the interaction of variables (when doing anova). 
+
+*Let's look at this problem:*
+If you look at our anxiety dataframe, we have more than 1 continous variable that we can plot as our y-axis (SES, Age, SelfReport, Relative Report, Stress, Drug_use). What if I want to plot two variables on the y-axis at the same time? The first thing that came to mind is that *I can use our original ggplot syntax + geom_boxplot(for Stress) + geom_boxplot(for SES)*
+
+Lets see how this turn out: 
+```{r}
+boxplot3 <- ggplot(data=anxiety, mapping = aes(x=agegroup, fill=agegroup)) + scale_x_discrete(limit= c("YA", "MA", "OA")) + ylim(0,50)
+
+#Adding two separate geom_boxplot(stress and anxiety selfreport) to the frame. 
+boxplot3 + geom_boxplot(aes(y=anxiety$Stress)) + geom_boxplot(aes(y=anxiety$Anxiety_SelfReport))
+```
+
+Yuck! The problem for this approach is that two boxplots on top of each other. You can also try to shift the x and y coordinates but it gets tricky if you have more than 2 boxplot for each discrete variable. 
+
+*The right approach*: 
+1. Use the %>% and gather() function to convert the wide format to long format. 
+```{r}
+#Use %>% . 
+anxiety %>%
+  select(1:2,5,7,9) %>% #Select the columns you want from the anxiety data
+  gather(key=Measurement, value = Stress_Index, -Subject_ID, -Treatment_Group, -agegroup) #Key is the column title in which you want to plot/conver to long format, value is the numerical item associated with that key for each row. The "-" symbol represents all the columns in which you do not want to collapse into long format. 
+
+#Now that it is in the long format, Add another %>% into a ggplot. After you wrangle your data, make sure you are plotting the accurate variable on your x and y axis. 
+anxiety %>%
+  select(1:2,5,7,9) %>% 
+  gather(key=Measurement, value = Stress_Index, -Subject_ID, -Treatment_Group, -agegroup) %>%
+  ggplot(aes(x=agegroup, y=Stress_Index, fill=Measurement)) + geom_boxplot(width=0.2) 
+
+
+#Yay It works perfectly! If you want to include more variables to plot, you can select more columns in the beginning. Let's see if we can plot three variables for each age group. 
+anxiety %>%
+  select(1:2,5,7:9) %>% 
+  gather(key=Measurement, value = Stress_Index, -Subject_ID, -Treatment_Group, -agegroup) %>%
+  ggplot(aes(x=agegroup, y=Stress_Index, fill=Measurement)) + scale_x_discrete(limit=c("YA", "MA", "OA")) + geom_violin()
+
+
+longformat <- anxiety %>%
+  select(1:2,5,7:9) %>% 
+  gather(key=Measurement, value = Stress_Index, -Subject_ID, -Treatment_Group, -agegroup) %>%
+  ggplot(aes(x=agegroup, y=Stress_Index, fill=Measurement)) + scale_x_discrete(limit=c("YA", "MA", "OA")) + geom_violin() + theme_classic()
+
+```
+Don't worry if this seems extremely confusing to you. This really takes practice to understand what you are doing. This is just an intro to data wrangling I will remind you again when we have the lesson on data wrangling! 
+
+
+##Color changing! 
+There are so many different color palettes you can explore with R. The easiest way to choose what colors you want is to just google them. You can add them as complex codes that represents different colors. you can also choose some default color palette packages! 
+```{r}
+#If you are a fan of BLUE: scale_fill_brewer() default
+longformat + scale_fill_brewer()
+
+#If you are a minimalist: scale_fill_grey()
+longformat + scale_fill_grey()
+
+#You can also select specific palettes 
+longformat+ scale_fill_brewer(palette="RdBu")
+longformat+ scale_fill_brewer(palette="Purples")
+longformat+ scale_fill_brewer(palette="GnBu")
+
+#If you are an architect and you want to manually choose your fav colors. Do note that if you change colors this way, you need to supply the function the right amount of colors. In this case, we have three boxplots for each group, therefore you need to give 3 unique color codes. 
+longformat + scale_fill_manual(values=c("#CCFF00", "#FF00FF", "#0099FF"))
+#Or if you are boring like me: 
+longformat + scale_fill_manual(values=c("green", "blue", "red"))
+```
+
+Congratulations on finishing this lesson! Since this anxiety dataset is not the best at plotting continous variables as a function of time, we will explore several functions using the coronavirus data set. 
+
+
+##Task 1:The progression of all cases in Japan. I want to see how confirmed, death, and recovered cases change as a function of time. 
+
+x-axis = date
+y-axis = number of all types of cases
+Each color to represent types of cases
+```{r}
+
+ggplot(data= Japan, mapping= aes(x=date, y=cases, color= type)) + geom_point() + theme_classic() + geom_line(aes(y=cases))
+```
+
+
+##Task 2: 
+
+1. Using geom_col(), please visualize the number of 3 types of cases in Japan, South Korea, France, and US. Feel free to change any of the colors to make your barplots look colorful!
+x-axis = types of cases
+y-axis = # of cases
+fill = types of cases 
+
+2. Using geom_col(), please visualize the types of cases for 5 chinese cities. 
+
+3. Store each graph to 5 alphabets. a <- plot1, b<- plot2 etc...
+
+4. Use patchwork to stitch 5 plots into one big plot. 
+ 
+```{r}
+a <- ggplot(China, aes(x=Province.State, y=cases, fill=type)) + geom_col(position = "dodge") + xlab("Chinese Cities") + labs(title = "China") + scale_fill_brewer(palette = "YlOrRd")
+
+b <- ggplot(Japan, aes(x=type, y=cases, fill=type)) + geom_col(position = "dodge") + xlab("Japan") + labs(title = "Japan") + theme_classic() + scale_fill_brewer()
+
+c <- ggplot(South_Korea, aes(x=type, y=cases, fill=type)) + geom_col(position = "dodge") + xlab("South Korea") + labs(title = "South Korea")+ theme_classic() + scale_fill_viridis_d()
+
+d <-ggplot(US, aes(x=type, y=cases, fill=type)) + geom_col(position = "dodge") + xlab("United States of America") + labs(title = "United States of America")+ theme_classic() + scale_fill_manual(values=c("#CCFF00", "#FF00FF", "#0099FF"))
+
+e <- ggplot(France, aes(x=type, y=cases, fill=type)) + geom_col(position = "dodge") + xlab("France") + labs(title = "France")+ theme_classic()  + scale_fill_manual(values=c("green", "blue", "red"))
+
+
+(a|b)/(c|d|e)
+
+```
+
+All of the codes below belongs to guangchuang yu (The developer of ggimage.) I am copying his code to show you all the fun things you can do with ggplot! 
+```{r}
+install.packages('ggimage'); library(ggimage)
+
+#This is taken from the authors of ggimage. All of these codes belong to guangchuang yu
+img <- list.files(system.file("extdata", package="ggimage"),
+                  pattern="png", full.names=TRUE)
+d <- data.frame(x = rnorm(10),
+                y = rnorm(10),
+                image = sample(img, size=10, replace = TRUE)
+                )
+
+#Use can specify whatever images you want to plot
+ggplot(d, aes(x, y)) + geom_image(aes(image=image), size=.05) + theme_classic()
+
+#Gotta catch em all
+ggplot(d, aes(x, y)) + geom_pokemon(aes(image=ifelse(x>0, 'pikachu', 'charmander')), size=.1) + theme_classic()
+
+
+#Using Emoji as a datapoint and then finding the distance to the line of best fit
+iris2 <- iris[sample(1:nrow(iris), 30),]
+model <- lm(Petal.Length ~ Sepal.Length, data=iris2)
+iris2$fitted <- predict(model)
+
+ggplot(iris2, aes(x = Sepal.Length, y = Petal.Length)) +
+  geom_linerange(aes(ymin = fitted, ymax = Petal.Length),
+                 colour = "purple") +
+  geom_abline(intercept = model$coefficients[1],
+              slope = model$coefficients[2]) +
+    geom_emoji(aes(image = ifelse(abs(Petal.Length-fitted) > 0.5, '1f622', '1f600')))
+
+```

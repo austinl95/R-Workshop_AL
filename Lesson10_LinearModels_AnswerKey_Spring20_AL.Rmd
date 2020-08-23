@@ -1,0 +1,359 @@
+---
+title: "Lesson10_LinearModel_AnswerKey_Spring20_AL"
+author: "Austin Luor"
+date: "6/19/2020"
+output: html_document
+---
+
+Resources:
+<http://www.sthda.com/english/wiki/one-way-anova-test-in-r#how-one-way-anova-test-works>
+and Dr. Katie Cousins's R workshop 2018-2019. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Objectives 
+In this lesson, we will continnue our discussion of ANOVA, specifically talk about two-way ANOVA. Then, I'll be introducing linear models. 
+
+
+Objectives of this lesson:
+1.Two Way ANOVA R syntax 
+2. Why do we do linear modeling?
+3. How do we interpret linear models
+4. What is the difference between linear models (fixed effects) versus linear mixed effect models (random effects)?
+
+
+In this lesson, we will continue using the Fake Study data provided. This data set has two experimental groups. One received treatment and one does not (Control). 
+##Setting Environment 
+```{r}
+#Library necessary pacakges 
+if(!require("dplyr")) install.packages("dplyr"); library(dplyr)
+if(!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+if(!require("tidyverse")) install.packages("tidyverse");library(tidyverse)
+if(!require("patchwork")) install.packages("patchwork");library(patchwork)
+if(!require("Hmisc")) install.packages("Hmisc"); library(Hmisc)
+if(!require("corrplot")) install.packages("corrplot"); library(corrplot)
+if(!require("psych")) install.packages("psych"); library(psych)
+
+## Setting up the environment: anxiety & Corona
+
+#Setting the anxiety data for plotting. Run this section if your environment is cleaned. 
+anxiety <- read.csv("/Users/austinluor/Desktop/R_Workshop/Data/Fake_Study_Data.csv")
+#Classifying the variables
+anxiety$Subject_ID <- as.factor(anxiety$Subject_ID)
+anxiety$Age <- as.numeric(anxiety$Age)
+anxiety$Treatment_Group <- as.character(anxiety$Treatment_Group)
+
+
+#Removing 10 subjects and split everyone into 3 groups for ANOVA testing
+anxiety <- anxiety[1:30,c(1,3:8)]
+
+#Now you should have 30 subjects and 7 columns (check your environment)
+#Adding a new column and renaming the treatment groups
+anxiety$group <- NA
+
+#Overwriting the groups column. Assigning group A, B, C to 30 subjects. 10 each. 
+anxiety[1:10,8] <- "A"
+anxiety[11:20,8] <- "B"
+anxiety[21:30,8] <- "C"
+
+#Double check the dataframe. Make sure you have three unique groups. 
+anxiety
+
+groupA <- anxiety[1:10,]
+groupB <- anxiety[11:20,]
+groupC <- anxiety[21:30,]
+
+#Creating a new catagorical variable 
+anxiety$agegroup <- NA
+anxiety$agegroup[anxiety$Age < 25] <- "YA"
+anxiety$agegroup[anxiety$Age > 25] <- "MA"
+anxiety$agegroup[anxiety$Age > 45] <- "OA"
+
+
+```
+
+#Two Way ANOVA: Factorial (2+ factors) 
+A factorial experiment has two or more factors. This means that we can investigate the *main effect* of each factor on our outcome, and statistical *interactions*, where the response to one factor depends on the level of another factor. 
+
+Here we test the hypothesis that group and risk affect stress (main effects), and that the deleterious effects of risk are worse for individuals with specific groups you are assigned to (interaction). First, we create an ordinal variable for risk factors. Then consider the variance within a group compared to the variance between different groups.
+
+Since we already have three groups:
+```{r}
+#Adding a new column that gives them categorical assignments of risk levels
+anxiety$risk<-as.factor(ifelse(anxiety$Drug_Use>15,"High", "Low"))
+
+
+#Gathering data to plot factorial design
+anxiety[,c(6,8,10)] %>% ggplot(aes(x=group, y=Stress, fill=risk)) + geom_violin(draw_quantiles = c(0.5), alpha=0.5) + geom_point(shape = 21, position = position_jitterdodge(jitter.height = 0)) + theme_bw() + labs(x = "Experimental Groups", y="Index", fill = "Treatment")
+
+
+#Calling out a summary function with ANOVA. This is examining how stress levels vary between groups and risk. Additional interaction term of risk by group is in this model as well. 
+
+#Model 1: stress is different based on groups and risk
+two.way<-aov(Stress ~ group + risk, data = anxiety)
+
+#Model 2: stress is different based on the interaction of groups and risk
+interaction<-aov(Stress ~ group*risk, data=anxiety)
+
+
+
+#Find the AIC that best explains your data. The one with the lower AIC ususally explain your variance with the fewest parameters. 
+install.packages("AICcmodavg");library(AICcmodavg)
+
+model.set <- list(two.way, interaction)
+model.names <- c("two.way", "interaction")
+
+aictab(model.set, modnames = model.names)
+
+#Since two.way anova model wins, let's interpret our results by using the summary function. 
+summary(two.way)
+
+#Post-hoc Tukey. 
+TukeyHSD(two.way)
+
+```
+To add an interaction term use the notation `*`. This denotes that we'll calculate main effects for each factor and their interaction.
+
+
+Based on this plot, both treatment groups and risk levels may contribute to stress. But we want to know if the benefits of low stress are significantly different for higher risk vs lower risk subjects. `interaction.plot()` can help to visualize these effects, with arguments `x.factor`, `trace.factor`, and `response`.
+
+```{r}
+interaction.plot(anxiety$group, anxiety$risk, anxiety$Stress)
+```
+In this case, the only slope that looks slightly different is for adults in group A and group B. Our factor has multiple levels - all of which might not be informative to our outcome. Especially when we have very few observations for some levels, group C. In this instance, collapsing our factor levels might be a good idea to consider.
+
+*Note: the ordering of your variables matters!* This takes us to how Sum of Squares is calculated for each factor (I'll put this section in the very bottom of this lesson - Type I, II, and III Sum of Squares).
+
+```{r}
+summary(aov(anxiety$Stress ~ group*risk, data=anxiety))
+summary(aov(anxiety$Stress ~ risk*group, data=anxiety))
+```
+
+
+#Linear Models
+*Why do we use linear modeling compare to ANOVA?*
+
+1. ANOVA: Continuous dependent measure vs. categorical prediction (The percentage acccuracy of male vs. female)
+2. 'Standard' Regression: Continuous dependent measure vs. continuous predictors (The percentage accuracy vs age)
+3. Logistic Regression: Categorical dependent measure vs continuous predictors (survival vs age)
+
+Using linear model, it gives you the values of your dependent measures for the predictors that you have as well as the probability value as to how likely those values are. The basic idea is to express your relationship of interest. Essentailly, you are plotting a line of best fit for your model and see how well your predictors fit in that model. 
+
+###Overall formula of linear models
+Keeping in mind that y = mx + b and yu don't have to specify the error term and intercept
+overall: lm(formula = dependent variable ~ independent variable(s), data)
+
+*lm = explanatory variable ~ predictor(s) [x] + Intercept + error*
+
+For example: if our linear model is 'fluid intelligence ~ age' --> this translates to "fluid intelligence predicted by age"" or "intelligence as a function of age". The error term stands for all of the things that affect intelligence that are not age. In other words, all of the things from the perspective of our experiment that is random or uncontrollable. 
+
+Here we are seeing if stress can be predicted by drug use or stress as a function of drug use. 
+```{r}
+plot(Stress~Drug_Use, data = anxiety)
+```
+
+
+Model has the form: 
+`observed value = model prediction + statistical error`
+or
+`y = mu + epsilon`
+
+Model prediction, mu, can also be described as `B0 + B1x`, with B0 = intercept and B1 = slope
+
+```{r}
+Model<-lm(Stress~Drug_Use, data = anxiety)
+plot(Stress~Drug_Use, data = anxiety) + abline(Model)
+```
+
+The *residual* is the difference between the observed score, and the predicted score on Stress level at each "unit". (This might be difficult to understand because we don't really know what the stress index is. Let's say you are looking at complex listening scores, then you are trying to see if the predicted scores on complex listening is different at each dB of hearing threshold.)
+`e = Yobs - Ypre`
+
+The most common linear model is the *least squares* regression, which selects the intercept (B0) and slope (B1) which minimize the *residual sum of squares*(RSS)
+`RSS = e1^2 + e2^2...`
+
+#Interpreting LM
+Let's look a little more into our Linear Model.
+```{r}
+summary(Model)
+```
+
+*Residuals*
+Group statistics for all residuals.
+
+*Coefficients*
+  * Intercept: y-value where x=0. In this case, at 0grams of drug use our stress level is predicted to be 10.86 (Estimate). You can see this on the plot above. It also tells us if our intercept is different from 0 (SE, t-value, p), which is typically not interesting to us, unless the data is normalized.
+  
+  * Factors: Here are our predictors of Listening performance (i.e. Hearing). From this we see that for every +1 gram, the stress index increases by 0.191 points. This factor predicts a unique amount of the variance.
+
+t-score is computed by Estimate/SE
+```{r}
+10.86001/2.29153
+```
+  
+*F-statistic* and *p-value* 
+Whether your model makes predicitions that are better than noise. p-value is the probability of observing an F or t-statistic, assuming β1 = 0.
+
+
+*Degrees of freedom*
+DF. In simplest terms, we need 2 points to make a line. If we had only 2 observations, our residuals would be 0, and we would have no information on the error, or how well our model fits the real world. In this case, our output says we had 28 degrees of freedom to estimate the noise variance of our model.
+
+*Correlation Coefficient (R^2)* 
+While the residual standard error (RSE) provides an absolute measure of lack of fit of the model, it is measured in the units of Y. So it is not always clear what constitutes a good RSE. 
+R^2 is more interpretable: it is the proportion of variance explained. This is the sum of squares (variation) due to stress divided by the total sum of squares
+```{r}
+anova(Model)
+
+182/(182+1302)
+
+```
+
+R^2 = 0.1226. Checks out!
+
+*R squared vs Adjusted R squared* 
+Adjusted takes into account your degrees of freedom. You are penalized for additional predictors.
+
+###More on interpreting the model 
+
+1. Residuals: these are the deviations of the observed data points from the predicted values. If all of your residual points are close to the fitted line, that means the linear model predicts our data very well. The signs show whether the observation points are above or below the fitted line. 
+
+2. Multiple R-Squared: this is a measure of 'variance explained'. In other words, it is a measure of 'variance accounted for'. If your R^2 is 0.85, that means 85% of the stuff that is happening in our dataset is "explained" by our model. The rest of 15% is the whatever that is uncontrolled. In general, you want your R^2 to be high, but when study becomes more complex, the R^2 can be affected by other predictors or different phenomena. 
+
+3. Adjusted R-square: this value is a slightly different R^2 value that not only looks at how much variance is explained but also at how many fixed effects you used to do the explaining. You adjusted R-square can be much lower if you have more fixed effects. 
+
+4. F-statistic: explained/unexplained variances. The greater the F value, the greater the difference of means between two groups. 
+
+5. p-value: "assuming your model is doing nothing, the probability of your data is relatively low (because p-value is small in this case)" This is a probability under the condition that the mull hypothesis is true. In this case, the null hypothesis is "age has no effect on intelligence". With small p-value, you reject the null and accept the alternative hypothesis. 
+
+6. Intercept: Let's take another look at the coefficient table again. We see that (Intercept) is listed with an estimate number. The intercept is technically the mean of the your first group values. To visualize, treat this as at X=0, the y-value of your linear model. Note that next estimate value for your second group is either moving down or going up from that original y-intercept. 
+
+# Residual Plots
+There are a number of plots to visualize the distribution of our residuals, which can tell us if our model violates linear assumptions. These are the deviations of the observed data points from the predicted values. If all of your residual points are close to the fitted line, that means the linear model predicts our data very well. The signs show whether the observation points are above or below the fitted line. 
+```{r}
+plot(Model, which = 1)
+```
+*Residuals v Fitted line* 
+Shows how residuals cluster around our lm. Helps to visualize linear vs non-linear residuals. If our data are linear, no matter the variance, we'd expect the line to stay around 0. If not, the data might be better fit to a curve, rather than a line. But keep in mind that you want to avoid overfitting.
+
+Also look out for correlated residuals. This plot should have no pattern.
+
+To accomodate non-linear data, we can perform *polynomial regression*, by transforming our data (i.e. x^2, x^3). We can also perform other non-linear transformations (i.e. log(x), sqrt(x)), and then perform a standard linear regression.
+
+This plot has pointed out 3 potential outliers, or points with higher residuals. Even if outliers do not effect parameter estimates, they will alter your model fit. (I won't go into it, but you can identify outliers with studentized residuals>3. Just know that this exists)
+
+# Q-Q Plots
+Compare the distributions of two variables. If both are normally distributed, they should fall along the line.
+
+```{r}
+plot(Model, which = 2)
+```
+
+
+# Scale Location Plots
+Visually check the assumption of equal variance (homoscedasticity). If you see a horizontal line with equally (randomly) spread points, this indicates equal variance of the residuals.
+```{r}
+plot(Model, which = 3)
+```
+
+# Cook's distance plot
+Looks at influence of residuals. Measures how much your model would change if this point were omitted. Points with a Cook's distance greater than 1 (or much greater than other points) warrent examination.
+```{r}
+plot(Model, which = 4)
+```
+
+# Residuals vs Leverage plot
+Points with extreme values tend to exert more influence on the model. We have a few outliers. Are they the culprits? What would happen if we remove them from our data set? 
+
+In general, more leverage is good. A large variance in x provides more leverage to estimate y. But when only a few points represent extreme values, we want to examine them.
+```{r}
+plot(Model, which = 5)
+```
+
+In general, a linear model seems to fit these data well, if not perfectly. For some plots of comparison, see <http://data.library.virginia.edu/diagnostic-plots/>
+
+
+###Extras
+
+*Type I, II, and III Sum of Squares* 
+These approaches differ based on how they calculate variance, or *Sum of Squares (SS)*. This will yield different results when the data are unbalanced, though roughly similar results when the data are balanced. Importantly, the choice for which SS to use depends on your experimental hypothesis.
+
+We will explore the differences between Type I, II, and III Sums of Squares using a simple example of a *two-way ANOVA* (two independent variables). A *one-way ANOVA* uses one independent variable.
+
+####Type I Sums of Squares 
+Type I Sums of Squares ANOVA, or the 'sequential' method, tests the main effect of factor A, followed by the main effect of factor B after the main effect of A, followed by the interaction effect AB after the main effects of both B and A. This can be described by the following notation:
+  SS(A) for factor A.
+  SS(B | A) for factor B, given A.
+  SS(AB | B, A) for interaction AB, given A and B.
+
+We discussed linear models, which are closely related to ANOVAs. Let's compare output. In a LM, categorical variables are dummy coded (which Group is our reference group?) How can we interpret the beta weights for Groups 1-3?
+```{r}
+model<-lm(Stress ~ group * risk, data=anxiety)
+summary(model)
+```
+
+Now, we can see the overall effect of hearing loss on whisper intelligibility.
+```{r}
+anova(model) 
+```
+
+using the aov function:
+```{r}
+aov(model)
+```
+
+If your data is relatively balanced, meaning that there are relatively equal numbers of observations in each group, then all three types will give you the same answer. However, if your data are unbalanced, meaning that some groups of data have many more observations than others, then you need to use Type II (2) or Type III (3).
+Let's look at a frequency table for Stress level and Risk factors to determine whether our data are balanced or unbalanced:
+```{r}
+ftable(anxiety$Stress ~ anxiety$risk)
+```
+
+Are Hearing and Education balanced or unbalanced across our sample? The results of Type I are dependent on the realized sample sizes, namely the proportions in the particular data set. In other words, it is testing the first factor without controlling for the other factor.
+
+####Type II Sums of Squares 
+Tests for each main effect after the other main effect. Note that no significant interaction is assumed (in other words, you should test for interaction first (SS(AB | A, B)) and only if AB is not significant, continue with the analysis for main effects). This can be described in the following notation:
+  SS(A | B) for factor A.
+  SS(B | A) for factor B.
+  
+If there is indeed no interaction, then type II is statistically more powerful than type III.
+
+Note that our prior investigation of two-way anova using the 'anova' and 'aov' functions showed no significant interaction between Hearing and Education, and that sampling is unbalanced for Education, so Type II Sums of Squares ANOVA may be appropriate for our analysis.
+Reminder of our previous results
+```{r}
+anova(model)
+```
+
+To employ this using `anova()` or `aov()` functions, we can change the order of Hearing and Degree in the analysis, and look at the estimated effect of each variable AFTER ACCOUNTING FOR THE OTHER. So, we will look at the second line of our anova table output
+here, we will use the 'anova' function
+```{r}
+anova(lm(Stress ~ risk + group, data=anxiety))
+```
+
+```{r}
+anova(lm(Stress ~ group + risk , data=anxiety))
+```
+
+This shows that the main effect of Hearing is significant after accounting for the main effect of Education and vice versa.
+
+For an easier way to run this using one line of code, we can use the `Anova` function which is found in the `car` package. Now ordering of variables doesn't matter.
+```{r}
+
+
+Anova(lm(Stress ~ risk * group, data=anxiety), type = "II")
+Anova(lm(Stress ~ group * risk, data=anxiety), type = "II")
+
+```
+
+####Type III Sums of Squares
+Last, lets explore Type III Sums of Squares ANOVA, or 'partial' Sums of Squares. In essence, every term in the model is tested in light of every other term in the model.  That means that main effects are tested in light of interaction terms as well as in light of other main effects. Thus, this type tests for the presence of a main effect after the other main effect AND interaction and is therefore valid in the presence of a significant interaction.
+This can be described in the following notation:
+  SS(A | B, AB) for factor A.
+  SS(B | A, AB) for factor B.
+
+We already know that Education doesn't interact with Hearing to influence Total, but lets compare results with Type I, II, and III Sums of Squares.
+```{r}
+anova(model)
+Anova(model, type = 2)
+Anova(model, type = 3)
+```
+

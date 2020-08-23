@@ -1,0 +1,237 @@
+---
+title: "Lesson4_DataWrangling_AnswerKey_Spring20_AL"
+author: "Austin Luor"
+date: "5/13/2020"
+output: html_document
+---
+Additional source of course materials: <https://datacarpentry.org/R-ecology-lesson/03-dplyr.html#challenge18>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Lesson 4: Data Wrangling
+
+For this lesson, I will continue some of our previous discussion on using the tidyr/tidyverse/dplyr package as well as going more in depth about the gather() function. The most important aspect of this lesson is to understand how to reshape your data for plotting as well as mutating some aspects of your data (just like how we use the filter function before)
+
+The objectives of this lesson: learn some of the most common dplyr functions:
+
+select(): subset columns
+filter(): subset rows on conditions (we've already mastered this!)
+mutate(): create new columns by using information from other columns
+group_by() and summarize(): create summary statisitcs on grouped data
+gather() & spread()
+
+##Setting Environment 
+
+```{r}
+#Library necessary pacakges 
+if(!require("dplyr")) install.packages("dplyr"); library(dplyr)
+if(!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+if(!require("tidyverse")) install.packages("tidyverse");library(tidyverse)
+if(!require("patchwork")) install.packages("patchwork");library(patchwork)
+
+## Setting up the environment: anxiety & Corona
+
+#Setting the anxiety data for plotting. Run this section if your environment is cleaned. 
+anxiety <- read.csv("/Users/austinluor/Desktop/R_Workshop/Data/Fake_Study_Data.csv")
+#Classifying the variables
+anxiety$Subject_ID <- as.factor(anxiety$Subject_ID)
+anxiety$Age <- as.numeric(anxiety$Age)
+anxiety$Treatment_Group <- as.character(anxiety$Treatment_Group)
+
+
+#Creating a new catagorical variable 
+anxiety$agegroup <- NA
+anxiety$agegroup[anxiety$Age < 25] <- "YA"
+anxiety$agegroup[anxiety$Age > 25] <- "MA"
+anxiety$agegroup[anxiety$Age > 45] <- "OA"
+
+
+#################
+#Setting the coronavirus dataset for plotting. 
+corona <- readxl:::read_excel("/Users/austinluor/Desktop/R_Workshop/Data/coronavirus_dataset_shortened.xlsx", col_types = c("text", "text", "numeric","numeric", "date", "numeric", "text"))
+
+#Reclassify variables, is everything in the right category? If not, modify it 
+corona$Province.State <- as.character(corona$Province.State)
+corona$Country.Region <- as.character(corona$Country.Region)
+corona$Lat <- as.numeric(corona$Lat)
+corona$Long <- as.numeric(corona$Long)
+corona$cases <- as.numeric(corona$cases)
+corona$type <- as.character(corona$type)
+
+#Using the filter function to create a smaller dataframe for France
+corona_france <- filter(.data= corona, corona$Country.Region == "France")
+corona_france <- filter(.data= corona_france, corona_france$type == "confirmed")
+newscoverage <- sample(1:100, 89, replace =TRUE)
+
+corona_france$newscoverage <- newscoverage
+corona_france <- cbind(corona_france, newscoverage)
+corona_france["newscoverage"] <- newscoverage
+
+
+#Create another smaller dataframe for Japan, US, and South Korea
+Japan <- filter(.data= corona, corona$Country.Region == "Japan")
+US <- filter(.data= corona, corona$Country.Region == "US")
+France <- filter(.data= corona, corona$Country.Region == "France")
+South_Korea <- filter(.data= corona, corona$Country.Region == "Korea, South")
+
+#Create a separate dataframe for China
+China <- filter(.data= corona, corona$Country.Region == "China")
+
+#QUESTION 3
+#Find out how many total cities are there: using this function will tell us how many distinct items are in the column. In this case, there are 5 unique cities in this dataframe
+n_distinct(China$Province.State)
+
+#3. Find the mean of confirmed cases for each city in China
+China_confirmed <- filter(.data= China, China$type == "confirmed")
+
+mean(China_confirmed$cases[China_confirmed$Province.State == "Anhui"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Beijing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Chongqing"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Fujian"])
+mean(China_confirmed$cases[China_confirmed$Province.State == "Gansu"])
+
+```
+
+
+## Select() and Filter() 
+This is our good old friends and something that we have already mastered in the previous lessons. But its always good to remember how these functions work and the different forms the function can take. 
+
+Remember if you are working with a very wide dataframe (multiple columns for each observation), then it is very useful to use both select() and filter() to shorten your dataframe and examine the variables of your interest. 
+
+Overall formula:
+*select(dataframe, 1 column that you need, 1 column that you need, - 1 column that you don't need)*
+*filter(dataframe, conditional filters using operations)*
+
+```{r}
+#Selecting the columns that you need and you don't need
+select(anxiety, Subject_ID, Age, SES, Stress, Drug_Use, -agegroup)
+
+#if you know the column numbers:
+select(anxiety, c(1:3,5,7))
+
+#If you choose to use the %>% method, then you don't need to specify your dataframe within the select function
+anxiety %>% select(Subject_ID, Age, SES, -Drug_Use) %>% summary()
+
+
+#You can also nest a filter function within a select function
+example <- select(filter(anxiety, Age > 40), Subject_ID, Age, SES, Drug_Use, Stress)
+
+#You can also use select to search for criterias: Not as helpful but useful when you have more columns with string information
+#`starts_with("abc")` matches names that begin with “abc”.
+select(anxiety, starts_with("Treatment"))
+
+#`ends_with("xyz")` matches names that end with “xyz”.
+select(anxiety, ends_with("_R"))
+
+#`contains("abc")` matches names that contain “abc”.
+select(anxiety, contains("ID"), contains("Treatment"))
+```
+
+
+##Mutate() and group_by()
+Frequently you’ll want to create new columns based on the values in existing columns, for example to do unit conversions, or to find the ratio of values in two columns. Then, you can use mutate().Admittedly, this is so easy to do in excel - whatever you prefer.
+
+```{r, comment=NA}
+#Add variables from existing ones. Let's pretend that the chance of developing major depressive disorder is your two times your drug_use index. And your probability of seeking therapy is 3 times the stress index minus their self reported anxiety level.
+anxiety<-mutate(anxiety,
+                Depression = (anxiety$Drug_Use * 2)/100,
+                Therapy = ((anxiety$Stress * 3) - anxiety$Anxiety_SelfReport)/100)
+
+#Add another column to find the z score transformation 
+anxiety<- mutate(anxiety,
+                 z_score = (anxiety$Stress - mean(anxiety$Stress)/sd(anxiety$Stress)))
+
+```
+
+Can you think of other ways to transform the data? 
+
+    Arithmetic operators: +  -  *  /  ^
+    z-score transform: x - mean(x)/SD(x)
+    log transform: log()
+    Cumulative aggregates: cumsum(), cummean()
+
+Note: If you only want to keep the new variables, you can use `transmute()`
+
+Many data analysis tasks can be approached using the split-apply-combine paradigm: split the data into groups, apply some analysis to each group, and then combine the results. dplyr makes this very easy through the use of the *group_by()* function.
+
+The *summarize()* function
+group_by() is often used together with summarize(), which collapses each group into a single-row summary of that group. group_by() takes as arguments the column names that contain the categorical variables for which you want to calculate the summary statistics.
+
+```{r}
+#Find the age of both groups
+anxiety %>%
+  group_by(Treatment_Group) %>%
+  summarize(mean_age = mean(Age, na.rm = TRUE))
+
+#Find the average stress index of three age groups
+anxiety %>%
+  group_by(agegroup) %>%
+  summarize(mean_stress = mean(Stress, na.rm = TRUE))
+
+```
+
+
+## Task 1 Checkpoint: Let's bring everything together! 
+select(), group_by(), summarize() to find the mean Age, SES, Anxiety_SelfReport, and Depression for each treatment group (using Treatment_Group). And then do the same for the three age groups!
+```{r}
+#Grouping by Treatment vs Placebo group
+anxiety %>%
+  select(Age, Treatment_Group, SES, Anxiety_SelfReport, Depression) %>%
+  group_by(Treatment_Group) %>%
+  summarize(mean_age = mean(Age),
+            mean_SES = mean(SES),
+            mean_SelfReport = mean(Anxiety_SelfReport),
+            mean_Depression = mean(Depression))
+
+#Grouping by three age groups
+anxiety %>%
+  select(Age, Treatment_Group, SES, Anxiety_SelfReport, Depression, agegroup) %>%
+  group_by(agegroup) %>%
+  summarize(mean_age = mean(Age),
+            mean_SES = mean(SES),
+            mean_SelfReport = mean(Anxiety_SelfReport),
+            mean_Depression = mean(Depression))
+
+```
+
+
+
+## Spread() and Gather()
+Different functions rely on data being *long* (each observation on a different row) or *wide* (all observations for a subject on same row). `spread()` and `gather()` functions can convert dataset to wide or long, respectively
+
+gather() takes four principal arguments:
+
+1. the data
+2. the key column variable we wish to create from column names.
+3. the values column variable we wish to create and fill with values associated with the key.
+4. the names of the columns we use to fill the key variable (or to drop).
+
+gather(data, key= *variables whose names are column names*, value= *variables whose values are spread over the columns*, -*don't use this value of this variable*)
+
+Let's shorten our anxiety frame first so it is easier to visualize what happened: 
+```{r}
+anxiety_new <- anxiety %>% select(1:2,5,7:8)
+
+#Using the gather function
+anxiety_long <- anxiety_new %>% gather(key=Stress_index, value = Score, -Subject_ID, -Treatment_Group)
+
+#Viewing the changed dataframe
+View(anxiety_long)
+
+#See how powerful this tool is? Let's add plotting cause we love plotting
+anxiety_long %>% ggplot(aes(x=Treatment_Group, y= Score, fill=Stress_index)) + geom_boxplot() + theme_classic() + scale_fill_brewer()
+
+```
+
+Spread(): just the otherway around.
+```{r}
+anxiety_wide <- anxiety_long %>%
+  spread(key = Stress_index, value = Score)
+
+View(anxiety_wide)
+```
+
+Next Week: We will drill this gather() and Spread() function together! 
