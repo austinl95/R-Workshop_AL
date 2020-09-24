@@ -14,4 +14,4 @@ This is a 10 lessons-R workshop series that I led in Spring Semester of 2020 at 
 #Lesson 10 : Linear Models
 
 
-Big thanks to Dr. Katie Cousins who shared her R lesson materials with me. This Readme.file is still a work in progress. 
+Big thanks to Dr. Katie Cousins who shared her R lesson materials with me as well as WashU for providing the fake anxiety dataset.  This Readme.file is still a work in progress. 
